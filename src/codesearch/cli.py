@@ -148,6 +148,11 @@ def benchmark(
         "--skip-strategy",
         help="Skip the chunking-strategy sweep (expensive on large corpora).",
     ),
+    native: bool = typer.Option(
+        True,
+        "--native/--no-native",
+        help="Also measure the from-scratch HNSW against FAISS.",
+    ),
 ) -> None:
     """Compare exact vs HNSW search on recall@k and latency."""
     _require_python()
@@ -158,6 +163,7 @@ def benchmark(
             store_dir=store_dir,
             output_path=output,
             skip_strategy=skip_strategy,
+            include_native=native,
         )
     except FileNotFoundError as exc:
         err_console.print(f"[red]{exc}[/red]")

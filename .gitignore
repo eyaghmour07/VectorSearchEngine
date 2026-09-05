@@ -8,6 +8,8 @@ __pycache__/
 .codesearch-requests/
 .codesearch-django/
 .codesearch-scale/
+docs/_search.html
+docs/_benchmark.html
 dist/
 build/
 .ruff_cache/

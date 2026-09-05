@@ -1,7 +1,8 @@
 """A from-scratch HNSW over L2-normalized vectors, inner-product metric.
 
-The published benchmark tables still use FAISS. This index exists so the
-approximate search is something the project owns, not only something it wraps.
+Same M / efConstruction / efSearch defaults as the FAISS index so a
+head-to-head measurement is meaningful. Python and row-at-a-time graphs
+will lose to FAISS on latency; that gap is the point of the comparison.
 """
 
 from __future__ import annotations
@@ -44,19 +45,18 @@ class NativeHNSWIndex(VectorIndex):
             raise ValueError(f"Expected 2D vectors, got shape {vectors.shape}")
         if vectors.shape[1] != self.dim:
             raise ValueError(f"Expected dim {self.dim}, got {vectors.shape[1]}")
-        vectors = np.ascontiguousarray(vectors, dtype=np.float32)
-        self._vectors = np.zeros((0, self.dim), dtype=np.float32)
-        self._graph = []
+        self._vectors = np.ascontiguousarray(vectors, dtype=np.float32)
+        n = int(self._vectors.shape[0])
+        self._graph = [[] for _ in range(n)]
         self._enter = 0
         self._max_level = -1
-        for row in vectors:
-            self._insert(row)
+        self._rng = np.random.default_rng(0)
+        for node in range(n):
+            self._insert_node(node)
 
-    def _insert(self, vector: np.ndarray) -> None:
-        node = int(self._vectors.shape[0])
+    def _insert_node(self, node: int) -> None:
         level = int(self._rng.exponential(self.level_mult))
-        self._vectors = np.vstack([self._vectors, vector.reshape(1, -1)])
-        self._graph.append([[] for _ in range(level + 1)])
+        self._graph[node] = [[] for _ in range(level + 1)]
         if node == 0:
             self._enter = 0
             self._max_level = level
@@ -91,8 +91,7 @@ class NativeHNSWIndex(VectorIndex):
         changed = True
         while changed:
             changed = False
-            for neighbor in self._neighbors(current, level):
-                sim = self._score(neighbor, query)
+            for neighbor, sim in self._neighbor_scores(current, level, query):
                 if sim > best:
                     best = sim
                     current = neighbor
@@ -115,11 +114,10 @@ class NativeHNSWIndex(VectorIndex):
             worst = w[0][0]
             if sim < worst and len(w) >= ef:
                 break
-            for neighbor in self._neighbors(node, level):
+            for neighbor, nsim in self._neighbor_scores(node, level, query):
                 if neighbor in visited:
                     continue
                 visited.add(neighbor)
-                nsim = self._score(neighbor, query)
                 if nsim > worst or len(w) < ef:
                     heappush(candidates, (-nsim, neighbor))
                     heappush(w, (nsim, neighbor))
@@ -129,14 +127,28 @@ class NativeHNSWIndex(VectorIndex):
         return [idx for _, idx in sorted(w, reverse=True)]
 
     def _select(self, query: np.ndarray, candidates: list[int], m: int) -> list[int]:
-        ranked = sorted(candidates, key=lambda idx: self._score(idx, query), reverse=True)
-        return ranked[:m]
+        if not candidates:
+            return []
+        ids = np.asarray(candidates, dtype=np.int64)
+        scores = self._vectors[ids] @ query
+        order = np.argsort(-scores)[:m]
+        return [int(ids[i]) for i in order]
 
     def _neighbors(self, node: int, level: int) -> list[int]:
         layers = self._graph[node]
         if level >= len(layers):
             return []
         return layers[level]
+
+    def _neighbor_scores(
+        self, node: int, level: int, query: np.ndarray
+    ) -> list[tuple[int, float]]:
+        ids = self._neighbors(node, level)
+        if not ids:
+            return []
+        arr = np.asarray(ids, dtype=np.int64)
+        scores = self._vectors[arr] @ query
+        return [(int(i), float(s)) for i, s in zip(arr, scores)]
 
     def _score(self, idx: int, query: np.ndarray) -> float:
         return float(self._vectors[idx] @ query)

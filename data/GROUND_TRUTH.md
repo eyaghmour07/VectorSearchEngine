@@ -17,4 +17,4 @@ How the labels were written:
 
 IDs were then checked against a parsed corpus so every label exists after the parser’s filters (tests, `setup.py`, bodies shorter than 3 lines). That check is existence only — it does not choose which function is relevant.
 
-Review the JSON before treating this as a paper-grade human annotation set. The PRD requires a person to own the labels; this file exists so that ownership is explicit rather than implied by a silent commit.
+Review the JSON before treating this as a paper-grade human annotation set. A person owns these labels; this file exists so that ownership is explicit rather than implied by a silent commit.

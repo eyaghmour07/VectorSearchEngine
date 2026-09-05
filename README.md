@@ -20,7 +20,7 @@ The CLI exits if it is launched with an older interpreter. Python 3.9 skipped fo
 pytest
 ```
 
-44 tests (43 pass on 3.12; one skip is the Python 3.11+ CLI guard). There is no CI config; the PRD forbids adding one.
+44 tests (43 pass on 3.12; one skip is the Python 3.11+ CLI guard). No CI yet; tests run locally with pytest.
 
 ## Quickstart
 
@@ -32,30 +32,6 @@ codesearch benchmark --store-dir .codesearch-requests --ground-truth data/ground
 ```
 
 Django and the 52k mixed corpus use their own stores, labels, and result files. Do not point a Django index at `data/ground_truth.json`.
-
-```
-$ codesearch search "retry a request after a connection failure" --store-dir .codesearch-requests -k 5
-
-1. SessionRedirectMixin.resolve_redirects    score 0.444
-   requests/sessions.py:186-307
-   Receives a Response. Returns a generator of Responses or Requests.
-
-2. Session.send                              score 0.432
-   requests/sessions.py:752-829
-   Send a given PreparedRequest.
-
-3. HTTPAdapter.send                          score 0.425
-   requests/adapters.py:634-748
-   Sends PreparedRequest object. Returns Response object.
-
-4. Response.ok                               score 0.387
-   requests/models.py:862-874
-   Returns True if :attr:`status_code` is less than 400, False if not.
-
-5. rewind_body                               score 0.373
-   requests/utils.py:1139-1155
-   Move file pointer back to its recorded starting position
-```
 
 ![codesearch search on the Requests index](docs/cli-search.png)
 
@@ -91,64 +67,83 @@ CPython main uses syntax newer than 3.12; those files warned and were skipped. T
 
 ## The finding: the tradeoff appears at 50k, not at 6k
 
-Recall@k is HNSW vs the flat index (flat is the referee). Each query ran 5 warmup + 20 timed iterations. p50 and p95 are over all timed samples.
+Recall@k is ANN vs the flat index (flat is the referee). Each query ran 5 warmup + 20 timed iterations. p50 and p95 are over all timed samples. `hnsw` is FAISS. `native` is this repo’s HNSW, same M=32 and efConstruction=200.
 
-| corpus | n | flat p50 | HNSW ef16 p50 | speedup | recall@10 |
-| --- | --- | --- | --- | --- | --- |
-| Requests | 151 | 0.009 ms | 0.009 ms | 1.0× | 0.983 |
-| Django | 6187 | 0.144 ms | 0.016 ms | 9.2× | 0.982 |
-| mixed | 52800 | 1.483 ms | 0.022 ms | 66× | 0.955 |
+| corpus | n | flat p50 | FAISS ef16 | native ef16 | FAISS speedup | native vs FAISS |
+| --- | --- | --- | --- | --- | --- | --- |
+| Requests | 151 | 0.009 ms | 0.009 ms (0.983) | 0.242 ms (1.000) | 1.0× | 28× slower |
+| Django | 6187 | 0.143 ms | 0.015 ms (0.982) | 0.315 ms (0.996) | 9.6× | 21× slower |
+| mixed | 52800 | 1.340 ms | 0.021 ms (0.955) | 0.332 ms (0.974) | 64× | 16× slower |
 
-At 151 vectors HNSW is not faster than a scan. At 6,187 it is 9.2× faster and saves 0.128 ms — a demo, not a decision. At 52,800 it is 66× faster and saves 1.46 ms. That is the scale where approximate search is a choice.
+At 151 vectors FAISS is not faster than a scan. At 6,187 it is 9.6× faster and saves 0.128 ms — a demo, not a decision. At 52,800 it is 64× faster and saves 1.32 ms. That is the scale where approximate search is a choice.
 
-HNSW’s tail is worse than flat’s, and the gap grows with n. On the mixed corpus, flat p95/p50 is 1.5× (2.218 / 1.483). HNSW at `efSearch=16` is 4.0× (0.090 / 0.022). Faster typical queries, fatter worst-case queries.
+Native HNSW matches FAISS recall (slightly higher on Django and the mixed corpus) and loses badly on speed. On 52,800 vectors it is still 4× faster than flat, so the algorithm is doing real ANN work; FAISS wins on SIMD and memory layout, not on a different graph.
+
+HNSW’s tail is worse than flat’s. On the mixed corpus, flat p95/p50 is 1.4× (1.837 / 1.340). FAISS at `efSearch=16` is 1.8× (0.037 / 0.021). Native is 1.4× (0.475 / 0.332) but from a much higher base.
 
 ### Mixed corpus (52800 vectors)
 
-From `benchmark_results_scale.json` `results`. On-disk: flat 77.3 MB, HNSW 91.1 MB. HNSW build 25.7 s.
+From `benchmark_results_scale.json` `results`. On-disk: flat 77.3 MB, FAISS 91.1 MB, native 85.7 MB. Build: FAISS 23.6 s, native 218 s.
 
-| index | efSearch | recall@10 | p50 (ms) | p95 (ms) | speedup |
+| index | efSearch | recall@10 | p50 (ms) | p95 (ms) | vs flat |
 | --- | --- | --- | --- | --- | --- |
-| flat | — | 1.000 | 1.483 | 2.218 | 1.0× |
-| hnsw | 16 | 0.955 | 0.022 | 0.090 | 66× |
-| hnsw | 32 | 0.991 | 0.030 | 0.087 | 49× |
-| hnsw | 64 | 1.000 | 0.048 | 0.181 | 31× |
-| hnsw | 128 | 1.000 | 0.084 | 0.242 | 18× |
-| hnsw | 256 | 1.000 | 0.175 | 0.425 | 8.5× |
+| flat | — | 1.000 | 1.340 | 1.837 | 1.0× |
+| hnsw (FAISS) | 16 | 0.955 | 0.021 | 0.037 | 64× |
+| hnsw (FAISS) | 32 | 0.991 | 0.029 | 0.058 | 46× |
+| hnsw (FAISS) | 64 | 1.000 | 0.046 | 0.094 | 29× |
+| hnsw (FAISS) | 128 | 1.000 | 0.084 | 0.190 | 16× |
+| hnsw (FAISS) | 256 | 1.000 | 0.170 | 0.435 | 7.9× |
+| native | 16 | 0.974 | 0.332 | 0.475 | 4.0× |
+| native | 32 | 0.986 | 0.584 | 0.805 | 2.3× |
+| native | 64 | 0.998 | 1.103 | 1.382 | 1.2× |
+| native | 128 | 0.998 | 2.295 | 2.826 | 0.6× |
+| native | 256 | 1.000 | 4.902 | 6.564 | 0.3× |
 
-Headline: **HNSW at `efSearch=16` was 66× faster than exact search at 95.5% recall@10.** `efSearch=32` is the conservative point: 99.1% recall, 49× faster.
+Headline: **FAISS at `efSearch=16` was 64× faster than exact search at 95.5% recall@10.** Native at the same setting was 4× faster than exact at 97.4% recall, and **16× slower than FAISS**.
 
-`efSearch` 64 and above reported recall@10 = 1.0. That is not a silent fallback to exact search — those rows are still 8–31× faster than flat, so the graph walk is not scanning 52,800 vectors. It means this 58-query set did not expose a top-10 miss once the candidate list was wide enough. The misses live at 16 and 32, which is why the full curve stays in the table.
+`efSearch` 64+ on FAISS reported recall@10 = 1.0 while staying far faster than flat, so that is not a silent exact scan. The misses live at 16 and 32.
 
 ### Django (6187 vectors)
 
-From `benchmark_results_django.json` `results`:
+![codesearch benchmark on the Django index](docs/cli-benchmark.png)
 
-| index | efSearch | recall@10 | p50 (ms) | p95 (ms) | speedup |
+From `benchmark_results_django.json` `results`. Native build 21.4 s vs FAISS 0.71 s.
+
+| index | efSearch | recall@10 | p50 (ms) | p95 (ms) | vs flat |
 | --- | --- | --- | --- | --- | --- |
-| flat | — | 1.000 | 0.144 | 0.165 | 1.0× |
-| hnsw | 16 | 0.982 | 0.016 | 0.022 | 9.2× |
-| hnsw | 32 | 0.996 | 0.022 | 0.031 | 6.6× |
-| hnsw | 64 | 1.000 | 0.034 | 0.052 | 4.2× |
-| hnsw | 128 | 1.000 | 0.061 | 0.094 | 2.4× |
-| hnsw | 256 | 1.000 | 0.122 | 0.207 | 1.2× |
+| flat | — | 1.000 | 0.143 | 0.164 | 1.0× |
+| hnsw (FAISS) | 16 | 0.982 | 0.015 | 0.021 | 9.6× |
+| hnsw (FAISS) | 32 | 0.996 | 0.021 | 0.029 | 6.7× |
+| hnsw (FAISS) | 64 | 1.000 | 0.035 | 0.054 | 4.1× |
+| hnsw (FAISS) | 128 | 1.000 | 0.060 | 0.096 | 2.4× |
+| hnsw (FAISS) | 256 | 1.000 | 0.121 | 0.197 | 1.2× |
+| native | 16 | 0.996 | 0.315 | 0.423 | 0.45× |
+| native | 32 | 1.000 | 0.555 | 0.703 | 0.26× |
+| native | 64 | 1.000 | 1.054 | 1.257 | 0.14× |
+| native | 128 | 1.000 | 2.091 | 2.353 | 0.07× |
+| native | 256 | 1.000 | 4.265 | 4.595 | 0.03× |
 
-Same 100% investigation as above, on a smaller n: high `efSearch` matches flat on this query set and gives the speedup back.
+At 6k, native HNSW is slower than brute force. FAISS is not. That is the implementation gap.
 
 ### Requests (151 vectors)
 
-From `benchmark_results_requests.json` `results`:
+From `benchmark_results_requests.json` `results`. Native build 0.15 s vs FAISS 0.003 s.
 
-| index | efSearch | recall@10 | p50 (ms) | p95 (ms) | speedup |
+| index | efSearch | recall@10 | p50 (ms) | p95 (ms) | vs flat |
 | --- | --- | --- | --- | --- | --- |
 | flat | — | 1.000 | 0.009 | 0.010 | 1.0× |
-| hnsw | 16 | 0.983 | 0.009 | 0.011 | 1.0× |
-| hnsw | 32 | 0.997 | 0.010 | 0.013 | 0.8× |
-| hnsw | 64 | 1.000 | 0.013 | 0.019 | 0.7× |
-| hnsw | 128 | 1.000 | 0.021 | 0.032 | 0.4× |
-| hnsw | 256 | 1.000 | 0.025 | 0.039 | 0.3× |
+| hnsw (FAISS) | 16 | 0.983 | 0.009 | 0.010 | 1.0× |
+| hnsw (FAISS) | 32 | 0.997 | 0.010 | 0.012 | 0.8× |
+| hnsw (FAISS) | 64 | 1.000 | 0.013 | 0.019 | 0.6× |
+| hnsw (FAISS) | 128 | 1.000 | 0.021 | 0.032 | 0.4× |
+| hnsw (FAISS) | 256 | 1.000 | 0.024 | 0.039 | 0.4× |
+| native | 16 | 1.000 | 0.242 | 0.355 | 0.04× |
+| native | 32 | 1.000 | 0.450 | 0.532 | 0.02× |
+| native | 64 | 1.000 | 0.888 | 1.021 | 0.01× |
+| native | 128 | 1.000 | 1.728 | 1.897 | 0.005× |
+| native | 256 | 1.000 | 2.009 | 2.175 | 0.004× |
 
-Graph walk overhead dominates when the corpus fits in one brute-force scan.
+Graph walk overhead dominates when the corpus fits in one brute-force scan. Native is 28× slower than FAISS here and never beats flat.
 
 `benchmark_results.json` is a pointer, not a measured run.
 
@@ -161,6 +156,8 @@ Flat hit@10 against the hand-written labels:
 | Requests | 29/30 |
 | Django | 20/28 |
 | mixed (same 58 labels, more distractors) | 40/58 |
+
+The isolated sets score 49/58 together. Nine of those hits disappear in the mixed tree. Eight are Requests queries that now lose to the same idea in urllib, Ansible, Sphinx, or matplotlib (`HTTPAdapter.send` → `UnixHTTPConnection.connect`, `_basic_auth_str` → `basic_auth_header`, `prepare_url` → `urlencode`). One is Django `QuerySet.update_or_create`, which SQLAlchemy’s `_emit_update_statements` outranks. The original eight Django misses stay misses. Distractors are other libraries’ copies of the same verb, not random neighbors.
 
 ### Why Django is 71% and Requests is 97%
 
@@ -190,4 +187,4 @@ Vectors are L2-normalized and both indexes use inner product. A `SyntaxError` in
 
 FAISS and PyTorch each ship an OpenMP runtime. Embedding runs in a worker process so those libraries never initialize two copies in the same address space. The process does not set `KMP_DUPLICATE_LIB_OK`.
 
-`--index-type native` is a from-scratch HNSW (inner product, same M / ef defaults). The tables above are still FAISS; native is tested on synthetic vectors and is not the published curve yet.
+`--index-type native` is the from-scratch HNSW in the tables above. Comparable recall, much slower queries: FAISS wins on SIMD and memory layout.

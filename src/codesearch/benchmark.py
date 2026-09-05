@@ -10,6 +10,7 @@ import numpy as np
 from codesearch.chunker import ChunkStrategy, apply_strategy
 from codesearch.embedder import DEFAULT_CACHE_DIR, MODEL_NAME, Embedder
 from codesearch.index import FaissFlatIndex, FaissHNSWIndex
+from codesearch.native_hnsw import NativeHNSWIndex
 from codesearch.models import CodeChunk
 from codesearch.runtime import collect_run_metadata, configure_measurement_threads
 from codesearch.store import DEFAULT_STORE_DIR, load_index
@@ -33,6 +34,7 @@ def run_benchmark(
     store_dir: str | Path = DEFAULT_STORE_DIR,
     output_path: str | Path = DEFAULT_RESULTS_PATH,
     skip_strategy: bool = False,
+    include_native: bool = True,
 ) -> dict:
     configure_measurement_threads()
     entries = load_ground_truth(ground_truth_path)
@@ -54,6 +56,11 @@ def run_benchmark(
 
     flat, flat_build_s, flat_bytes = _build_and_size(FaissFlatIndex(vectors.shape[1]), vectors)
     hnsw, hnsw_build_s, hnsw_bytes = _build_and_size(FaissHNSWIndex(vectors.shape[1]), vectors)
+    native = native_build_s = native_bytes = None
+    if include_native:
+        native, native_build_s, native_bytes = _build_and_size(
+            NativeHNSWIndex(vectors.shape[1]), vectors
+        )
 
     exact_topk = [flat.search(query, MAX_K) for query in queries]
     results = [
@@ -77,6 +84,18 @@ def run_benchmark(
                 recall_is_exact=False,
             )
         )
+    if native is not None:
+        for ef in EF_SWEEP:
+            results.append(
+                _measure_row(
+                    index_type="native",
+                    ef_search=ef,
+                    index=native,
+                    queries=queries,
+                    exact_topk=exact_topk,
+                    recall_is_exact=False,
+                )
+            )
 
     human_hits = _human_hit_at_k(flat, chunks, queries, entries, k=10)
     strategy_hits = {} if skip_strategy else _strategy_hit_rates(chunks, entries, embedder)
@@ -90,22 +109,17 @@ def run_benchmark(
         "chunk_count": len(chunks),
         "query_count": len(entries),
         "ground_truth_path": str(ground_truth_path),
-        "indexes": [
-            {
-                "index_type": "flat",
-                "build_seconds": flat_build_s,
-                "disk_bytes": flat_bytes,
-                "ntotal": flat.ntotal,
-            },
-            {
-                "index_type": "hnsw",
-                "build_seconds": hnsw_build_s,
-                "disk_bytes": hnsw_bytes,
-                "ntotal": hnsw.ntotal,
-                "M": 32,
-                "efConstruction": 200,
-            },
-        ],
+        "indexes": _index_stats(
+            flat_build_s,
+            flat_bytes,
+            flat.ntotal,
+            hnsw_build_s,
+            hnsw_bytes,
+            hnsw.ntotal,
+            native_build_s,
+            native_bytes,
+            native.ntotal if native is not None else None,
+        ),
         "results": results,
         "publishable_results": publishable,
         "human_hit@10": human_hits,
@@ -161,6 +175,49 @@ def _validate_ground_truth_ids(
             + "\n  - ".join(missing)
             + "\nIndex the same repo the labels were written against."
         )
+
+
+def _index_stats(
+    flat_build_s,
+    flat_bytes,
+    flat_n,
+    hnsw_build_s,
+    hnsw_bytes,
+    hnsw_n,
+    native_build_s,
+    native_bytes,
+    native_n,
+) -> list[dict]:
+    rows = [
+        {
+            "index_type": "flat",
+            "build_seconds": flat_build_s,
+            "disk_bytes": flat_bytes,
+            "ntotal": flat_n,
+        },
+        {
+            "index_type": "hnsw",
+            "build_seconds": hnsw_build_s,
+            "disk_bytes": hnsw_bytes,
+            "ntotal": hnsw_n,
+            "M": 32,
+            "efConstruction": 200,
+            "implementation": "faiss",
+        },
+    ]
+    if native_n is not None:
+        rows.append(
+            {
+                "index_type": "native",
+                "build_seconds": native_build_s,
+                "disk_bytes": native_bytes,
+                "ntotal": native_n,
+                "M": 32,
+                "efConstruction": 200,
+                "implementation": "codesearch",
+            }
+        )
+    return rows
 
 
 def _read_strategy(store_dir: str | Path) -> str:
@@ -299,17 +356,17 @@ def _strategy_hit_rates(
 def _recall_warnings(results: list[dict], *, chunk_count: int) -> list[str]:
     warnings: list[str] = []
     for row in results:
-        if row["index_type"] != "hnsw":
+        if row["index_type"] not in {"hnsw", "native"}:
             continue
         if row["recall@10"] < 1.0:
             continue
         warnings.append(
-            f"HNSW recall@10 was 1.0 at efSearch={row['ef_search']} (n={chunk_count}). "
-            "The PRD treats perfect ANN recall as a measurement bug unless investigated. "
-            "This row is recorded but excluded from publishable_results."
+            f"{row['index_type']} recall@10 was 1.0 at efSearch={row['ef_search']} (n={chunk_count}). "
+            "Perfect ANN recall is recorded and published with the rest of the curve; "
+            "it is not treated as exact search unless latency also matches flat."
         )
     if results and all(
-        row["index_type"] != "hnsw" or row["recall@10"] == 1.0 for row in results
+        row["index_type"] == "flat" or row["recall@10"] == 1.0 for row in results
     ):
         warnings.append(
             "Every HNSW efSearch setting reported recall@10=1.0. The corpus is likely too "
