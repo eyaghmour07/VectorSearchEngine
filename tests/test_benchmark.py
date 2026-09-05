@@ -59,6 +59,14 @@ def test_perfect_hnsw_recall_is_not_publishable() -> None:
     assert [row["ef_search"] for row in publishable] == [None, 16]
 
 
+def test_skip_strategy_is_an_explicit_benchmark_flag() -> None:
+    import inspect
+
+    from codesearch.benchmark import run_benchmark
+
+    assert "skip_strategy" in inspect.signature(run_benchmark).parameters
+
+
 def test_load_ground_truth_rejects_empty_file(tmp_path: Path) -> None:
     path = tmp_path / "empty.json"
     path.write_text("[]\n", encoding="utf-8")

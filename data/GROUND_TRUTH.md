@@ -6,6 +6,7 @@ These files are the labeled evaluation sets. Each query names a behavior; `relev
 | --- | --- | --- |
 | `ground_truth.json` | `psf/requests` (`src/`) | 30 |
 | `ground_truth_django.json` | `django/django` (`django/`) | 28 |
+| `ground_truth_scale.json` | mixed 11-repo tree | 58 (the two sets above; Django IDs prefixed with `django/`) |
 
 How the labels were written:
 

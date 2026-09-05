@@ -32,6 +32,7 @@ err_console = Console(stderr=True)
 class IndexType(str, Enum):
     flat = "flat"
     hnsw = "hnsw"
+    native = "native"
 
 
 class StrategyOpt(str, Enum):
@@ -142,6 +143,11 @@ def benchmark(
     ),
     store_dir: Path = typer.Option(DEFAULT_STORE_DIR, "--store-dir"),
     output: Path = typer.Option(DEFAULT_RESULTS_PATH, "--output"),
+    skip_strategy: bool = typer.Option(
+        False,
+        "--skip-strategy",
+        help="Skip the chunking-strategy sweep (expensive on large corpora).",
+    ),
 ) -> None:
     """Compare exact vs HNSW search on recall@k and latency."""
     _require_python()
@@ -151,6 +157,7 @@ def benchmark(
             ground_truth_path=ground_truth,
             store_dir=store_dir,
             output_path=output,
+            skip_strategy=skip_strategy,
         )
     except FileNotFoundError as exc:
         err_console.print(f"[red]{exc}[/red]")
@@ -204,7 +211,7 @@ def _print_benchmark(payload: dict) -> None:
         )
     console.print(info)
 
-    table = Table(title="Publishable recall and latency")
+    table = Table(title="Recall and latency")
     table.add_column("index")
     table.add_column("efSearch")
     table.add_column("recall@1")
@@ -213,7 +220,7 @@ def _print_benchmark(payload: dict) -> None:
     table.add_column("p50 ms")
     table.add_column("p95 ms")
     table.add_column("qps")
-    for row in payload["publishable_results"]:
+    for row in payload["results"]:
         table.add_row(
             row["index_type"],
             "-" if row["ef_search"] is None else str(row["ef_search"]),

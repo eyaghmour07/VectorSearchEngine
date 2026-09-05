@@ -9,6 +9,7 @@ import faiss
 
 from codesearch.embedder import l2_normalize
 from codesearch.index import FaissFlatIndex, FaissHNSWIndex
+from codesearch.native_hnsw import NativeHNSWIndex
 
 
 def _distinct_vectors(n: int, dim: int) -> np.ndarray:
@@ -95,6 +96,22 @@ def test_hnsw_rejects_non_positive_ef_search() -> None:
     index.build(_distinct_vectors(3, 4))
     with pytest.raises(ValueError, match="ef_search"):
         index.search(np.ones(4, dtype=np.float32), k=1, ef_search=0)
+
+
+def test_native_hnsw_finds_the_query_vector_and_round_trips(tmp_path: Path) -> None:
+    vectors = _distinct_vectors(8, 16)
+    index = NativeHNSWIndex(16, m=8, ef_construction=32, ef_search=32)
+    index.build(vectors)
+    hits = index.search(vectors[3], k=1, ef_search=32)
+    assert hits[0][0] == 3
+    assert hits[0][1] == pytest.approx(1.0, abs=1e-5)
+
+    path = tmp_path / "native.npz"
+    index.save(path)
+    restored = NativeHNSWIndex(16, ef_search=32)
+    restored.load(path)
+    assert restored.ntotal == 8
+    assert restored.search(vectors[3], k=1)[0][0] == 3
 
 
 def test_search_rejects_multi_row_query() -> None:

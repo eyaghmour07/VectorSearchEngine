@@ -1,0 +1,187 @@
+{
+  "repo_path": "/private/tmp/scale-src",
+  "model_name": "all-MiniLM-L6-v2",
+  "chunk_strategy": "full",
+  "chunk_count": 52800,
+  "query_count": 58,
+  "ground_truth_path": "data/ground_truth_scale.json",
+  "indexes": [
+    {
+      "index_type": "flat",
+      "build_seconds": 0.02359658299246803,
+      "disk_bytes": 81100845,
+      "ntotal": 52800
+    },
+    {
+      "index_type": "hnsw",
+      "build_seconds": 25.65748304198496,
+      "disk_bytes": 95475042,
+      "ntotal": 52800,
+      "M": 32,
+      "efConstruction": 200
+    }
+  ],
+  "results": [
+    {
+      "index_type": "flat",
+      "ef_search": null,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 1.4833330060355365,
+      "p95_ms": 2.2178651619469734,
+      "qps": 620.1688485582171,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 16,
+      "recall@1": 0.9655172413793104,
+      "recall@5": 0.9551724137931035,
+      "recall@10": 0.9551724137931036,
+      "p50_ms": 0.022332998923957348,
+      "p95_ms": 0.08981490973383185,
+      "qps": 30205.608111440677,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 32,
+      "recall@1": 1.0,
+      "recall@5": 0.996551724137931,
+      "recall@10": 0.9913793103448276,
+      "p50_ms": 0.030229013646021485,
+      "p95_ms": 0.08654371195007111,
+      "qps": 27797.459919048863,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 64,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.04816701402887702,
+      "p95_ms": 0.1814788673073053,
+      "qps": 15777.184892137913,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": false
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 128,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.08410398731939495,
+      "p95_ms": 0.24244109517894682,
+      "qps": 9597.816687092234,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": false
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 256,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.1752294774632901,
+      "p95_ms": 0.42500800045672776,
+      "qps": 4808.084469631268,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": false
+    }
+  ],
+  "publishable_results": [
+    {
+      "index_type": "flat",
+      "ef_search": null,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 1.4833330060355365,
+      "p95_ms": 2.2178651619469734,
+      "qps": 620.1688485582171,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 16,
+      "recall@1": 0.9655172413793104,
+      "recall@5": 0.9551724137931035,
+      "recall@10": 0.9551724137931036,
+      "p50_ms": 0.022332998923957348,
+      "p95_ms": 0.08981490973383185,
+      "qps": 30205.608111440677,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 32,
+      "recall@1": 1.0,
+      "recall@5": 0.996551724137931,
+      "recall@10": 0.9913793103448276,
+      "p50_ms": 0.030229013646021485,
+      "p95_ms": 0.08654371195007111,
+      "qps": 27797.459919048863,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 1160,
+      "publishable": true
+    }
+  ],
+  "human_hit@10": {
+    "k": 10,
+    "hits": 40,
+    "queries": 58,
+    "rate": 0.6896551724137931
+  },
+  "strategy_hit@10": {},
+  "output_path": "benchmark_results_scale.json",
+  "recall_warnings": [
+    "HNSW recall@10 was 1.0 at efSearch=64 (n=52800). The PRD treats perfect ANN recall as a measurement bug unless investigated. This row is recorded but excluded from publishable_results.",
+    "HNSW recall@10 was 1.0 at efSearch=128 (n=52800). The PRD treats perfect ANN recall as a measurement bug unless investigated. This row is recorded but excluded from publishable_results.",
+    "HNSW recall@10 was 1.0 at efSearch=256 (n=52800). The PRD treats perfect ANN recall as a measurement bug unless investigated. This row is recorded but excluded from publishable_results."
+  ],
+  "run": {
+    "timestamp_utc": "2026-09-05T19:52:35.986470+00:00",
+    "codesearch_version": "0.1.0",
+    "python": "3.12.14",
+    "python_implementation": "CPython",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 8,
+    "faiss_threads": 1,
+    "openmp_library": "/Users/eyagzz/VectorSearchEngine/.venv312/lib/python3.12/site-packages/torch/lib/libomp.dylib",
+    "numpy_version": "2.5.2",
+    "faiss_version": "1.15.0",
+    "sentence_transformers_version": "6.0.1",
+    "torch_version": "2.14.0",
+    "model_name": "all-MiniLM-L6-v2",
+    "model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "corpus_path": "/private/tmp/scale-src",
+    "corpus_git_sha": null
+  }
+}

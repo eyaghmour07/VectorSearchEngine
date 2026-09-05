@@ -32,6 +32,7 @@ def run_benchmark(
     ground_truth_path: str | Path = DEFAULT_GROUND_TRUTH,
     store_dir: str | Path = DEFAULT_STORE_DIR,
     output_path: str | Path = DEFAULT_RESULTS_PATH,
+    skip_strategy: bool = False,
 ) -> dict:
     configure_measurement_threads()
     entries = load_ground_truth(ground_truth_path)
@@ -45,7 +46,7 @@ def run_benchmark(
         raise ValueError("Index is too small to benchmark.")
     _validate_ground_truth_ids(entries, chunks, ground_truth_path)
 
-    embedder = Embedder(model_name=MODEL_NAME, cache_dir=DEFAULT_CACHE_DIR)
+    embedder = Embedder(model_name=MODEL_NAME, cache_dir=Path(store_dir) / "embed_cache")
     texts = [chunk.embedding_text for chunk in chunks]
     vectors = embedder.encode(texts)
     query_matrix = embedder.encode([entry["query"] for entry in entries], show_progress=False)
@@ -78,7 +79,7 @@ def run_benchmark(
         )
 
     human_hits = _human_hit_at_k(flat, chunks, queries, entries, k=10)
-    strategy_hits = _strategy_hit_rates(chunks, entries, embedder)
+    strategy_hits = {} if skip_strategy else _strategy_hit_rates(chunks, entries, embedder)
     warnings = _recall_warnings(results, chunk_count=len(chunks))
     publishable = [row for row in results if row["index_type"] == "flat" or row["recall@10"] < 1.0]
 

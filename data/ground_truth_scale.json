@@ -1,0 +1,350 @@
+[
+  {
+    "query": "when the socket drops, try the HTTP call again instead of failing immediately",
+    "relevant_ids": [
+      "requests/adapters.py::HTTPAdapter.send"
+    ]
+  },
+  {
+    "query": "trust or reject a site certificate using a local CA file",
+    "relevant_ids": [
+      "requests/adapters.py::HTTPAdapter.cert_verify"
+    ]
+  },
+  {
+    "query": "wrap a low-level urllib3 reply into the library's Response type",
+    "relevant_ids": [
+      "requests/adapters.py::HTTPAdapter.build_response"
+    ]
+  },
+  {
+    "query": "create the shared urllib3 pool that later requests reuse",
+    "relevant_ids": [
+      "requests/adapters.py::HTTPAdapter.init_poolmanager"
+    ]
+  },
+  {
+    "query": "open a pooled connection that already has TLS settings applied",
+    "relevant_ids": [
+      "requests/adapters.py::HTTPAdapter.get_connection_with_tls_context"
+    ]
+  },
+  {
+    "query": "for a proxied HTTP call, send the full URL instead of just the path",
+    "relevant_ids": [
+      "requests/adapters.py::HTTPAdapter.request_url"
+    ]
+  },
+  {
+    "query": "one method that builds, prepares, and fires an HTTP call on a session",
+    "relevant_ids": [
+      "requests/sessions.py::Session.request"
+    ]
+  },
+  {
+    "query": "copy the session's cookies and headers onto a new outgoing request",
+    "relevant_ids": [
+      "requests/sessions.py::Session.prepare_request"
+    ]
+  },
+  {
+    "query": "keep following 3xx Location hops and remember each hop",
+    "relevant_ids": [
+      "requests/sessions.py::SessionRedirectMixin.resolve_redirects"
+    ]
+  },
+  {
+    "query": "drop the Authorization header after a redirect to a different host",
+    "relevant_ids": [
+      "requests/sessions.py::SessionRedirectMixin.should_strip_auth"
+    ]
+  },
+  {
+    "query": "read the next hop URL out of a 3xx response",
+    "relevant_ids": [
+      "requests/sessions.py::SessionRedirectMixin.get_redirect_target"
+    ]
+  },
+  {
+    "query": "after a redirect, recompute proxies and honor NO_PROXY",
+    "relevant_ids": [
+      "requests/sessions.py::SessionRedirectMixin.rebuild_proxies"
+    ]
+  },
+  {
+    "query": "choose which mounted adapter handles a given URL scheme",
+    "relevant_ids": [
+      "requests/sessions.py::Session.get_adapter"
+    ]
+  },
+  {
+    "query": "blend env proxy and CA-bundle settings into the session defaults",
+    "relevant_ids": [
+      "requests/sessions.py::Session.merge_environment_settings"
+    ]
+  },
+  {
+    "query": "turn uploaded files into a multipart/form-data payload",
+    "relevant_ids": [
+      "requests/models.py::RequestEncodingMixin._encode_files"
+    ]
+  },
+  {
+    "query": "serialize JSON or form fields into the outgoing request body",
+    "relevant_ids": [
+      "requests/models.py::PreparedRequest.prepare_body"
+    ]
+  },
+  {
+    "query": "assemble a final URL with query parameters percent-encoded",
+    "relevant_ids": [
+      "requests/models.py::PreparedRequest.prepare_url"
+    ]
+  },
+  {
+    "query": "turn a cookie jar into a Cookie request header",
+    "relevant_ids": [
+      "requests/models.py::PreparedRequest.prepare_cookies"
+    ]
+  },
+  {
+    "query": "stream the response a chunk at a time so it does not all sit in RAM",
+    "relevant_ids": [
+      "requests/models.py::Response.iter_content"
+    ]
+  },
+  {
+    "query": "decode the raw bytes using the charset from headers or a detector",
+    "relevant_ids": [
+      "requests/models.py::Response.text"
+    ]
+  },
+  {
+    "query": "turn the response body into a Python dict or list via JSON",
+    "relevant_ids": [
+      "requests/models.py::Response.json"
+    ]
+  },
+  {
+    "query": "raise if the status code is a client or server error",
+    "relevant_ids": [
+      "requests/models.py::Response.raise_for_status"
+    ]
+  },
+  {
+    "query": "compute the Digest Authorization header from a WWW-Authenticate challenge",
+    "relevant_ids": [
+      "requests/auth.py::HTTPDigestAuth.build_digest_header"
+    ]
+  },
+  {
+    "query": "after a 401, resend the request with digest credentials",
+    "relevant_ids": [
+      "requests/auth.py::HTTPDigestAuth.handle_401"
+    ]
+  },
+  {
+    "query": "base64-encode user and password for a Basic Authorization header",
+    "relevant_ids": [
+      "requests/auth.py::_basic_auth_str"
+    ]
+  },
+  {
+    "query": "pull Set-Cookie values from a response into a jar",
+    "relevant_ids": [
+      "requests/cookies.py::extract_cookies_to_jar"
+    ]
+  },
+  {
+    "query": "look up host credentials in a ~/.netrc file",
+    "relevant_ids": [
+      "requests/utils.py::get_netrc_auth"
+    ]
+  },
+  {
+    "query": "should this URL skip the configured HTTP proxy?",
+    "relevant_ids": [
+      "requests/utils.py::should_bypass_proxies"
+    ]
+  },
+  {
+    "query": "run registered response callbacks and keep a replacement if they return one",
+    "relevant_ids": [
+      "requests/hooks.py::dispatch_hook"
+    ]
+  },
+  {
+    "query": "rewind a file-like body so a retried request can read it again",
+    "relevant_ids": [
+      "requests/utils.py::rewind_body"
+    ]
+  },
+  {
+    "query": "try each authentication backend until one accepts the credentials",
+    "relevant_ids": [
+      "django/contrib/auth/__init__.py::authenticate"
+    ]
+  },
+  {
+    "query": "persist a user id on the session after a successful login",
+    "relevant_ids": [
+      "django/contrib/auth/__init__.py::login"
+    ]
+  },
+  {
+    "query": "clear the logged-in user from the current session",
+    "relevant_ids": [
+      "django/contrib/auth/__init__.py::logout"
+    ]
+  },
+  {
+    "query": "load the User model class configured in AUTH_USER_MODEL",
+    "relevant_ids": [
+      "django/contrib/auth/__init__.py::get_user_model"
+    ]
+  },
+  {
+    "query": "compare a raw password against the stored hash on a user",
+    "relevant_ids": [
+      "django/contrib/auth/base_user.py::AbstractBaseUser.check_password"
+    ]
+  },
+  {
+    "query": "fetch one model instance or raise Http404 when it is missing",
+    "relevant_ids": [
+      "django/shortcuts.py::get_object_or_404"
+    ]
+  },
+  {
+    "query": "build a redirect response from a view name, model, or raw URL",
+    "relevant_ids": [
+      "django/shortcuts.py::redirect"
+    ]
+  },
+  {
+    "query": "load the authenticated user from the session, or return AnonymousUser",
+    "relevant_ids": [
+      "django/contrib/auth/__init__.py::get_user"
+    ]
+  },
+  {
+    "query": "look up a URL pattern by view name and fill in its arguments",
+    "relevant_ids": [
+      "django/urls/base.py::reverse"
+    ]
+  },
+  {
+    "query": "match an incoming path against the URLconf and return the view",
+    "relevant_ids": [
+      "django/urls/base.py::resolve"
+    ]
+  },
+  {
+    "query": "run a block of ORM writes as one database transaction",
+    "relevant_ids": [
+      "django/db/transaction.py::Atomic.__enter__"
+    ]
+  },
+  {
+    "query": "insert many model rows in as few SQL statements as possible",
+    "relevant_ids": [
+      "django/db/models/query.py::QuerySet.bulk_create"
+    ]
+  },
+  {
+    "query": "return an existing row or create it if the lookup misses",
+    "relevant_ids": [
+      "django/db/models/query.py::QuerySet.get_or_create"
+    ]
+  },
+  {
+    "query": "update a row if it exists, otherwise insert it",
+    "relevant_ids": [
+      "django/db/models/query.py::QuerySet.update_or_create"
+    ]
+  },
+  {
+    "query": "join related objects in the same SQL query to avoid N+1 lookups",
+    "relevant_ids": [
+      "django/db/models/query.py::QuerySet.select_related"
+    ]
+  },
+  {
+    "query": "prefetch reverse relations in a second query instead of one per row",
+    "relevant_ids": [
+      "django/db/models/query.py::QuerySet.prefetch_related"
+    ]
+  },
+  {
+    "query": "reject a POST that is missing a valid CSRF token",
+    "relevant_ids": [
+      "django/middleware/csrf.py::CsrfViewMiddleware.process_view"
+    ]
+  },
+  {
+    "query": "read a CSRF token that templates can put in a hidden field",
+    "relevant_ids": [
+      "django/middleware/csrf.py::get_token"
+    ]
+  },
+  {
+    "query": "serve a cached page on the way in if one exists",
+    "relevant_ids": [
+      "django/middleware/cache.py::FetchFromCacheMiddleware.process_request"
+    ]
+  },
+  {
+    "query": "store a successful response in the cache on the way out",
+    "relevant_ids": [
+      "django/middleware/cache.py::UpdateCacheMiddleware.process_response"
+    ]
+  },
+  {
+    "query": "reconstruct the hostname from the request, honoring forwarded headers",
+    "relevant_ids": [
+      "django/http/request.py::HttpRequest.get_host"
+    ]
+  },
+  {
+    "query": "build an absolute URL from a request path",
+    "relevant_ids": [
+      "django/http/request.py::HttpRequest.build_absolute_uri"
+    ]
+  },
+  {
+    "query": "set a cookie on an outgoing HTTP response",
+    "relevant_ids": [
+      "django/http/response.py::HttpResponseBase.set_cookie"
+    ]
+  },
+  {
+    "query": "slice a queryset into pages for a list view",
+    "relevant_ids": [
+      "django/views/generic/list.py::MultipleObjectMixin.paginate_queryset"
+    ]
+  },
+  {
+    "query": "load one object for a detail view from the URL kwargs",
+    "relevant_ids": [
+      "django/views/generic/detail.py::SingleObjectMixin.get_object"
+    ]
+  },
+  {
+    "query": "temporarily change Django settings inside a test",
+    "relevant_ids": [
+      "django/test/utils.py::override_settings.enable"
+    ]
+  },
+  {
+    "query": "hash a password with the configured hasher",
+    "relevant_ids": [
+      "django/contrib/auth/hashers.py::make_password"
+    ]
+  },
+  {
+    "query": "send an email through Django's configured email backend",
+    "relevant_ids": [
+      "django/core/mail/__init__.py::send_mail"
+    ]
+  }
+]

@@ -1,8 +1,9 @@
 {
   "deprecated": true,
-  "message": "This filename is not a measured artifact. Published numbers come from corpus-specific files so a Requests run cannot overwrite a Django table.",
+  "message": "This filename is not a measured artifact. Published numbers come from corpus-specific files.",
   "artifacts": {
     "requests": "benchmark_results_requests.json",
-    "django": "benchmark_results_django.json"
+    "django": "benchmark_results_django.json",
+    "scale": "benchmark_results_scale.json"
   }
 }

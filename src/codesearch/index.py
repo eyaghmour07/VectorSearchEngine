@@ -165,7 +165,11 @@ def create_index(index_type: str, dim: int, ef_search: int = DEFAULT_EF_SEARCH) 
         return FaissFlatIndex(dim)
     if index_type == "hnsw":
         return FaissHNSWIndex(dim, ef_search=ef_search)
-    raise ValueError(f"Unknown index type {index_type!r}. Expected 'flat' or 'hnsw'.")
+    if index_type == "native":
+        from codesearch.native_hnsw import NativeHNSWIndex
+
+        return NativeHNSWIndex(dim, ef_search=ef_search)
+    raise ValueError(f"Unknown index type {index_type!r}. Expected 'flat', 'hnsw', or 'native'.")
 
 
 def _search_faiss(index, query_vector: np.ndarray, k: int) -> list[tuple[int, float]]:
