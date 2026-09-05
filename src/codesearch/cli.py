@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
-import os
-
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+import sys
 from enum import Enum
 from pathlib import Path
 
@@ -11,12 +10,18 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from codesearch.benchmark import DEFAULT_GROUND_TRUTH, run_benchmark
+from codesearch.benchmark import (
+    DEFAULT_GROUND_TRUTH,
+    DEFAULT_RESULTS_PATH,
+    GroundTruthError,
+    run_benchmark,
+)
 from codesearch.chunker import apply_strategy, parse_strategy
-from codesearch.embedder import DEFAULT_CACHE_DIR, MODEL_NAME, Embedder
+from codesearch.embedder import MODEL_NAME, Embedder
 from codesearch.index import DEFAULT_EF_SEARCH, create_index
 from codesearch.models import SearchResult
 from codesearch.parser import parse_repo
+from codesearch.runtime import configure_measurement_threads
 from codesearch.store import DEFAULT_STORE_DIR, MetadataMismatchError, load_index, save_index
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
@@ -39,14 +44,27 @@ def _configure_logging() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 
-@app.command()
-def index(
+def _require_python() -> None:
+    if sys.version_info < (3, 11):
+        err_console.print(
+            "[red]codesearch requires Python 3.11+. "
+            f"This interpreter is {sys.version.split()[0]}. "
+            "Older parsers skip newer syntax and change the corpus.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+
+@app.command("index")
+def index_cmd(
     repo: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True, readable=True),
     index_type: IndexType = typer.Option(IndexType.flat, "--index-type"),
     strategy: StrategyOpt = typer.Option(StrategyOpt.full, "--strategy"),
+    store_dir: Path = typer.Option(DEFAULT_STORE_DIR, "--store-dir"),
 ) -> None:
     """Index a Python repository into a persistent vector index."""
+    _require_python()
     _configure_logging()
+    configure_measurement_threads()
     repo_path = str(repo.resolve())
     chunk_strategy = parse_strategy(strategy.value)
 
@@ -57,7 +75,7 @@ def index(
     if not chunks:
         raise typer.Exit(code=1)
 
-    embedder = Embedder(model_name=MODEL_NAME, cache_dir=DEFAULT_CACHE_DIR)
+    embedder = Embedder(model_name=MODEL_NAME, cache_dir=store_dir / "embed_cache")
     vectors = embedder.encode([chunk.embedding_text for chunk in chunks])
     if vectors.shape[0] != len(chunks):
         raise RuntimeError(
@@ -67,7 +85,7 @@ def index(
     vec_index = create_index(index_type.value, vectors.shape[1])
     vec_index.build(vectors)
     save_index(
-        DEFAULT_STORE_DIR,
+        store_dir,
         vec_index,
         chunks,
         repo_path=repo_path,
@@ -75,23 +93,24 @@ def index(
         chunk_strategy=chunk_strategy.value,
         index_type=index_type.value,
     )
-    console.print(
-        f"Wrote {index_type.value} index with {len(chunks)} chunks to {DEFAULT_STORE_DIR}/"
-    )
+    console.print(f"Wrote {index_type.value} index with {len(chunks)} chunks to {store_dir}/")
 
 
 @app.command()
 def search(
     query: str = typer.Argument(...),
     k: int = typer.Option(10, "-k", "--k", min=1),
-    ef_search: int = typer.Option(DEFAULT_EF_SEARCH, "--ef-search"),
+    ef_search: int = typer.Option(DEFAULT_EF_SEARCH, "--ef-search", min=1),
     strategy: StrategyOpt = typer.Option(StrategyOpt.full, "--strategy"),
+    store_dir: Path = typer.Option(DEFAULT_STORE_DIR, "--store-dir"),
 ) -> None:
     """Search the current index with a natural-language description of behavior."""
+    _require_python()
     _configure_logging()
+    configure_measurement_threads()
     try:
         stored = load_index(
-            DEFAULT_STORE_DIR,
+            store_dir,
             model_name=MODEL_NAME,
             chunk_strategy=strategy.value,
             ef_search=ef_search,
@@ -99,11 +118,11 @@ def search(
     except FileNotFoundError as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
-    except MetadataMismatchError as exc:
+    except (MetadataMismatchError, ValueError, TypeError, json.JSONDecodeError) as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    embedder = Embedder(model_name=MODEL_NAME, cache_dir=DEFAULT_CACHE_DIR)
+    embedder = Embedder(model_name=MODEL_NAME, cache_dir=store_dir / "embed_cache")
     query_vec = embedder.encode_query(query)
     hits = stored.index.search(query_vec, k, ef_search=ef_search)
     results = [
@@ -121,15 +140,22 @@ def benchmark(
         exists=False,
         dir_okay=False,
     ),
+    store_dir: Path = typer.Option(DEFAULT_STORE_DIR, "--store-dir"),
+    output: Path = typer.Option(DEFAULT_RESULTS_PATH, "--output"),
 ) -> None:
     """Compare exact vs HNSW search on recall@k and latency."""
+    _require_python()
     _configure_logging()
     try:
-        payload = run_benchmark(ground_truth_path=ground_truth, store_dir=DEFAULT_STORE_DIR)
+        payload = run_benchmark(
+            ground_truth_path=ground_truth,
+            store_dir=store_dir,
+            output_path=output,
+        )
     except FileNotFoundError as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
-    except ValueError as exc:
+    except (ValueError, GroundTruthError, TypeError) as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
     _print_benchmark(payload)
@@ -178,7 +204,7 @@ def _print_benchmark(payload: dict) -> None:
         )
     console.print(info)
 
-    table = Table(title="Recall and latency")
+    table = Table(title="Publishable recall and latency")
     table.add_column("index")
     table.add_column("efSearch")
     table.add_column("recall@1")
@@ -187,7 +213,7 @@ def _print_benchmark(payload: dict) -> None:
     table.add_column("p50 ms")
     table.add_column("p95 ms")
     table.add_column("qps")
-    for row in payload["results"]:
+    for row in payload["publishable_results"]:
         table.add_row(
             row["index_type"],
             "-" if row["ef_search"] is None else str(row["ef_search"]),
@@ -199,6 +225,8 @@ def _print_benchmark(payload: dict) -> None:
             f"{row['qps']:.1f}",
         )
     console.print(table)
+    for warning in payload.get("recall_warnings") or []:
+        err_console.print(f"[yellow]{warning}[/yellow]")
     console.print(f"Wrote {payload['output_path']}")
 
 

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from codesearch.embedder import EMBED_DIM, MODEL_NAME
 from codesearch.index import VectorIndex, create_index
 from codesearch.models import CodeChunk
+from codesearch.runtime import file_sha256
 
 DEFAULT_STORE_DIR = Path(".codesearch")
 INDEX_FILENAME = "index.faiss"
@@ -28,6 +31,9 @@ class IndexMeta:
     chunk_count: int
     build_timestamp: str
     embedding_dim: int = EMBED_DIM
+    generation_id: str = ""
+    index_sha256: str = ""
+    chunks_sha256: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -38,6 +44,9 @@ class IndexMeta:
             "chunk_count": self.chunk_count,
             "build_timestamp": self.build_timestamp,
             "embedding_dim": self.embedding_dim,
+            "generation_id": self.generation_id,
+            "index_sha256": self.index_sha256,
+            "chunks_sha256": self.chunks_sha256,
         }
 
     @classmethod
@@ -50,6 +59,9 @@ class IndexMeta:
             chunk_count=int(data["chunk_count"]),
             build_timestamp=data["build_timestamp"],
             embedding_dim=int(data.get("embedding_dim", EMBED_DIM)),
+            generation_id=str(data.get("generation_id", "")),
+            index_sha256=str(data.get("index_sha256", "")),
+            chunks_sha256=str(data.get("chunks_sha256", "")),
         )
 
 
@@ -72,31 +84,66 @@ def save_index(
     index_type: str,
 ) -> IndexMeta:
     directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
     if index.ntotal != len(chunks):
         raise ValueError(
             f"Index size {index.ntotal} does not match chunk count {len(chunks)}"
         )
-    index.save(directory / INDEX_FILENAME)
-    with (directory / CHUNKS_FILENAME).open("w", encoding="utf-8") as handle:
-        for chunk in chunks:
-            handle.write(json.dumps(chunk.to_dict(), ensure_ascii=False) + "\n")
     dim = getattr(index, "dim", None)
     if dim is None:
         raise ValueError("Index is missing a dim attribute")
-    meta = IndexMeta(
-        repo_path=repo_path,
-        model_name=model_name,
-        chunk_strategy=chunk_strategy,
-        index_type=index_type,
-        chunk_count=len(chunks),
-        build_timestamp=datetime.now(timezone.utc).isoformat(),
-        embedding_dim=int(dim),
-    )
-    (directory / META_FILENAME).write_text(
-        json.dumps(meta.to_dict(), indent=2) + "\n", encoding="utf-8"
-    )
+
+    parent = directory.parent if directory.parent != Path("") else Path(".")
+    parent.mkdir(parents=True, exist_ok=True)
+    staging = parent / f".{directory.name}.tmp.{uuid4().hex}"
+    backup = parent / f".{directory.name}.bak.{uuid4().hex}"
+    staging.mkdir(parents=True, exist_ok=False)
+    try:
+        index_path = staging / INDEX_FILENAME
+        chunks_path = staging / CHUNKS_FILENAME
+        index.save(index_path)
+        with chunks_path.open("w", encoding="utf-8") as handle:
+            for chunk in chunks:
+                handle.write(json.dumps(chunk.to_dict(), ensure_ascii=False) + "\n")
+            handle.flush()
+            os_fsync(handle)
+        meta = IndexMeta(
+            repo_path=repo_path,
+            model_name=model_name,
+            chunk_strategy=chunk_strategy,
+            index_type=index_type,
+            chunk_count=len(chunks),
+            build_timestamp=datetime.now(timezone.utc).isoformat(),
+            embedding_dim=int(dim),
+            generation_id=uuid4().hex,
+            index_sha256=file_sha256(index_path),
+            chunks_sha256=file_sha256(chunks_path),
+        )
+        meta_path = staging / META_FILENAME
+        meta_path.write_text(json.dumps(meta.to_dict(), indent=2) + "\n", encoding="utf-8")
+        with meta_path.open("rb") as handle:
+            os_fsync(handle)
+        if directory.exists():
+            directory.rename(backup)
+        staging.rename(directory)
+        if backup.exists():
+            shutil.rmtree(backup)
+    except Exception:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+        if backup.exists() and not directory.exists():
+            backup.rename(directory)
+        raise
     return meta
+
+
+def os_fsync(handle) -> None:
+    handle.flush()
+    try:
+        import os
+
+        os.fsync(handle.fileno())
+    except OSError:
+        pass
 
 
 def load_index(
@@ -120,6 +167,18 @@ def load_index(
     raw = json.loads(meta_path.read_text(encoding="utf-8"))
     meta = IndexMeta.from_dict(raw)
     _validate_meta(meta, model_name=model_name, chunk_strategy=chunk_strategy)
+    if meta.index_sha256:
+        actual = file_sha256(index_path)
+        if actual != meta.index_sha256:
+            raise ValueError(
+                f"index.faiss checksum mismatch: expected {meta.index_sha256}, got {actual}"
+            )
+    if meta.chunks_sha256:
+        actual = file_sha256(chunks_path)
+        if actual != meta.chunks_sha256:
+            raise ValueError(
+                f"chunks.jsonl checksum mismatch: expected {meta.chunks_sha256}, got {actual}"
+            )
 
     chunks = _load_chunks(chunks_path)
     if len(chunks) != meta.chunk_count:

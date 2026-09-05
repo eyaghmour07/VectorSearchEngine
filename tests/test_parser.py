@@ -170,6 +170,102 @@ def venv_fn():
     assert [c.id for c in chunks] == ["pkg/real.py::long_enough"]
 
 
+def test_nested_class_method_keeps_outer_scope(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "nested_class.py",
+        '''
+class Outer:
+    class Inner:
+        def method(self, value):
+            first = value + 1
+            second = first + 1
+            return second
+''',
+    )
+    chunks = parse_repo(tmp_path)
+    assert {c.qualname for c in chunks} == {"Outer.Inner.method"}
+    assert chunks[0].id == "nested_class.py::Outer.Inner.method"
+
+
+def test_property_setter_and_overload_are_disambiguated(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "props.py",
+        '''
+from typing import overload
+
+class Box:
+    @property
+    def name(self):
+        stored = self._name
+        cleaned = stored.strip()
+        return cleaned
+
+    @name.setter
+    def name(self, value):
+        cleaned = value.strip()
+        self._name = cleaned
+        self._dirty = True
+
+@overload
+def parse(value: int) -> int:
+    first = value + 1
+    second = first + 1
+    return second
+
+def parse(value):
+    text = str(value)
+    cleaned = text.strip()
+    return cleaned
+''',
+    )
+    chunks = parse_repo(tmp_path)
+    qualnames = {c.qualname for c in chunks}
+    assert "Box.name" in qualnames
+    assert "Box.name@setter" in qualnames
+    assert "parse@overload" in qualnames
+    assert "parse" in qualnames
+
+
+def test_duplicate_ids_get_line_suffix(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "dupes.py",
+        '''
+def twin(value):
+    first = value + 1
+    second = first + 1
+    return second
+
+def twin(value):
+    other = value * 2
+    extra = other + 1
+    return extra
+''',
+    )
+    chunks = parse_repo(tmp_path)
+    ids = {c.id for c in chunks}
+    assert any(chunk_id.endswith("#L2") for chunk_id in ids)
+    assert any("#L" in chunk_id for chunk_id in ids)
+    assert len(ids) == 2
+
+
+def test_encoding_declaration_is_honored(tmp_path: Path) -> None:
+    source = (
+        "# -*- coding: latin-1 -*-\n"
+        "def decode_label(value):\n"
+        "    label = 'caf\xe9'\n"
+        "    extra = label + value\n"
+        "    return extra\n"
+    )
+    path = tmp_path / "latin.py"
+    path.write_bytes(source.encode("latin-1"))
+    chunks = parse_repo(tmp_path)
+    assert len(chunks) == 1
+    assert "café" in chunks[0].body
+
+
 def test_return_annotation_is_in_signature(tmp_path: Path) -> None:
     _write(
         tmp_path,

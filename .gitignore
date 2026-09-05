@@ -1,9 +1,12 @@
 .venv/
+.venv312/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .codesearch/
+.codesearch-requests/
+.codesearch-django/
 dist/
 build/
 .ruff_cache/

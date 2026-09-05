@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import logging
 import os
+import tokenize
 from pathlib import Path
 
 from codesearch.models import CodeChunk
@@ -33,10 +34,8 @@ def parse_repo(repo_path: str | Path) -> list[CodeChunk]:
 
     chunks: list[CodeChunk] = []
     for path in _iter_python_files(repo):
-        try:
-            source = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            logger.warning("Skipping %s: could not decode as UTF-8", path)
+        source = _read_source(path)
+        if source is None:
             continue
         try:
             tree = ast.parse(source, filename=str(path))
@@ -45,7 +44,17 @@ def parse_repo(repo_path: str | Path) -> list[CodeChunk]:
             continue
         rel = path.relative_to(repo).as_posix()
         chunks.extend(_extract_chunks(tree, source, repo, rel))
+    _disambiguate_ids(chunks)
     return chunks
+
+
+def _read_source(path: Path) -> str | None:
+    try:
+        with tokenize.open(path) as handle:
+            return handle.read()
+    except (SyntaxError, UnicodeDecodeError, tokenize.TokenError) as exc:
+        logger.warning("Skipping %s: could not decode source: %s", path, exc)
+        return None
 
 
 def _iter_python_files(repo: Path) -> list[Path]:
@@ -80,21 +89,19 @@ def _extract_chunks(
     source_lines = source.splitlines()
     chunks: list[CodeChunk] = []
 
-    def visit(node: ast.AST, class_parts: list[str], func_parts: list[str]) -> None:
+    def visit(node: ast.AST, scope: list[str]) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.ClassDef):
-                visit(child, class_parts + [child.name], func_parts)
+                visit(child, scope + [child.name])
             elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                chunk = _chunk_from_function(
-                    child, source_lines, repo, file_path, class_parts, func_parts
-                )
+                chunk = _chunk_from_function(child, source_lines, repo, file_path, scope)
                 if chunk is not None:
                     chunks.append(chunk)
-                visit(child, class_parts, func_parts + [child.name])
+                visit(child, scope + [child.name])
             else:
-                visit(child, class_parts, func_parts)
+                visit(child, scope)
 
-    visit(tree, [], [])
+    visit(tree, [])
     return chunks
 
 
@@ -103,14 +110,16 @@ def _chunk_from_function(
     source_lines: list[str],
     repo: Path,
     file_path: str,
-    class_parts: list[str],
-    func_parts: list[str],
+    scope: list[str],
 ) -> CodeChunk | None:
     body = _function_body(node, source_lines)
     if _nonempty_line_count(body) < MIN_BODY_LINES:
         return None
 
-    qualname = ".".join([*class_parts, *func_parts, node.name])
+    qualname = ".".join([*scope, node.name])
+    role = _decorator_role(node)
+    if role:
+        qualname = f"{qualname}@{role}"
     docstring = ast.get_docstring(node)
     start_line = node.lineno
     end_line = node.end_lineno if node.end_lineno is not None else node.lineno
@@ -126,6 +135,43 @@ def _chunk_from_function(
         body=body,
         embedding_text="",
     )
+
+
+def _decorator_role(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    for decorator in node.decorator_list:
+        name = _decorator_name(decorator)
+        if name is None:
+            continue
+        simple = name.rsplit(".", 1)[-1]
+        if simple in {"setter", "deleter", "overload"}:
+            return simple
+    return None
+
+
+def _decorator_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _decorator_name(node.value)
+        if parent is None:
+            return node.attr
+        return f"{parent}.{node.attr}"
+    if isinstance(node, ast.Call):
+        return _decorator_name(node.func)
+    return None
+
+
+def _disambiguate_ids(chunks: list[CodeChunk]) -> None:
+    seen: dict[str, list[CodeChunk]] = {}
+    for chunk in chunks:
+        seen.setdefault(chunk.id, []).append(chunk)
+    for group in seen.values():
+        if len(group) < 2:
+            continue
+        for chunk in group:
+            suffix = f"#L{chunk.start_line}"
+            chunk.qualname = f"{chunk.qualname}{suffix}"
+            chunk.id = f"{chunk.file_path}::{chunk.qualname}"
 
 
 def _function_body(

@@ -6,13 +6,15 @@ The point of the project is not “search that looks plausible.” It is a measu
 
 ## Install
 
-Python 3.9+ (3.11+ preferred). No API keys. The embedding model downloads once, then everything is local.
+Python 3.11+. No API keys. The embedding model downloads once, then everything is local.
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+
+The CLI exits if it is launched with an older interpreter. Python 3.9 skipped four Django production files (`asgi.py`, `defaulttags.py`, `choices.py`, `json.py`) and produced a different corpus.
 
 ## Quickstart
 
@@ -20,63 +22,92 @@ Index [psf/requests](https://github.com/psf/requests). Clone it first — `/path
 
 ```bash
 git clone --depth 1 https://github.com/psf/requests.git /tmp/requests-corpus
-codesearch index /tmp/requests-corpus/src --index-type flat --strategy full
-codesearch search "retry a request after a connection failure"
-codesearch benchmark --ground-truth data/ground_truth.json
+codesearch index /tmp/requests-corpus/src --store-dir .codesearch-requests --index-type flat --strategy full
+codesearch search "retry a request after a connection failure" --store-dir .codesearch-requests
+codesearch benchmark --store-dir .codesearch-requests --ground-truth data/ground_truth.json --output benchmark_results_requests.json
 ```
 
-If you already cloned it somewhere else, pass that directory (the one that contains `requests/sessions.py`). On this machine that is `/tmp/requests-corpus/src`.
+Django is a separate corpus with its own labels and its own result file:
 
-`data/ground_truth.json` is 30 queries written by reading the `requests` source. It was not generated from this tool or an LLM.
+```bash
+git clone --depth 1 https://github.com/django/django.git /tmp/django-corpus
+codesearch index /tmp/django-corpus/django --store-dir .codesearch-django
+codesearch benchmark --store-dir .codesearch-django --ground-truth data/ground_truth_django.json --output benchmark_results_django.json
+```
+
+Do not point the Django index at `data/ground_truth.json`. Those queries are Requests-specific.
+
+Label provenance is in `data/GROUND_TRUTH.md`. Review those files before treating them as a paper-grade annotation set.
 
 ## What was indexed
 
-| corpus | functions after filters | role |
-| --- | --- | --- |
-| `psf/requests` `src/` | 151 | labeled search quality + ground truth |
-| `django/django` `django/` | 6116 | published ANN recall/latency table |
+Measured 2026-09-05 on this machine (macOS arm64, 8 cores, FAISS pinned to 1 thread). Model `all-MiniLM-L6-v2` revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Python 3.12.14, faiss-cpu 1.15.0, sentence-transformers 6.0.1, torch 2.14.0.
 
-`requests` is the corpus the PRD examples use, but 151 vectors is too small for HNSW to beat exact search. The published speed/recall numbers are from Django (6116 vectors, 384-d, `all-MiniLM-L6-v2`, `full` chunking).
+| corpus | git SHA | functions after filters | labels | result file |
+| --- | --- | --- | --- | --- |
+| `psf/requests` `src/` | `dae7ef63b4df6eded86637f251fc4e3a06c3b479` | 151 | `data/ground_truth.json` (30) | `benchmark_results_requests.json` |
+| `django/django` `django/` | `b3f4d83aad7f589f165a6d8b020b7acba4936f35` | 6187 | `data/ground_truth_django.json` (28) | `benchmark_results_django.json` |
 
-On-disk index size on Django: flat **9.0 MB**, HNSW **10.5 MB**. HNSW build time: **0.156 s**.
+`requests` is the PRD example corpus, but 151 vectors is too small for HNSW to beat exact search. The published speed/recall numbers are from Django.
+
+On-disk Django index size: flat **9.1 MB**, HNSW **10.7 MB**. HNSW build time: **0.692 s**.
 
 ## Benchmark results
 
-Measured on this machine. 30 queries, 5 warmup + 20 timed runs each, p50/p95 over all timed samples. Recall@k is HNSW vs the flat index (flat is the referee), not vs the JSON labels.
+Recall@k is HNSW vs the flat index (flat is the referee), not vs the JSON labels. Each query ran 5 warmup + 20 timed iterations. p50/p95 are over all timed samples.
+
+HNSW rows with recall@10 = 1.0 are stored in the JSON `results` array and omitted here. The PRD treats perfect ANN recall as a measurement bug unless investigated; on this run that happened at `efSearch` 64 and above.
+
+### Django (6187 vectors) — published table
+
+From `benchmark_results_django.json` `publishable_results`:
 
 | index | efSearch | recall@10 | p50 latency (ms) | speedup vs flat |
 | --- | --- | --- | --- | --- |
-| flat | — | 1.000 | 0.142 | 1.0x |
-| hnsw | 16 | 0.927 | 0.016 | 8.9x |
-| hnsw | 32 | 0.990 | 0.022 | 6.5x |
-| hnsw | 64 | 0.997 | 0.034 | 4.2x |
-| hnsw | 128 | 1.000 | 0.057 | 2.5x |
-| hnsw | 256 | 1.000 | 0.115 | 1.2x |
+| flat | — | 1.000 | 0.144 | 1.0× |
+| hnsw | 16 | 0.982 | 0.016 | 9.2× |
+| hnsw | 32 | 0.996 | 0.022 | 6.6× |
 
-Headline: **HNSW at `efSearch=16` was 8.9x faster than exact search at 92.7% recall@10.** Raising `efSearch` to 64 recovered 99.7% recall and was still 4.2x faster.
+Headline: **HNSW at `efSearch=16` was 9.2× faster than exact search at 98.2% recall@10.** Raising `efSearch` to 32 recovered 99.6% recall and was still 6.6× faster.
 
-`efSearch` 128 and 256 reported 100% recall@10. That is expected: those settings search so much of the graph that HNSW matches flat on this query set. It is not the default (`efSearch=64`), and the lower settings show the real miss rate. Raw numbers are in `benchmark_results.json`.
+Labeled hit@10 on the Django set (flat, `full` chunking): **20/28**.
 
-### Small-corpus check (`requests`, 151 vectors)
+### Requests (151 vectors) — small-corpus check
 
-HNSW was **not faster** than flat (p50 0.010 ms vs 0.009 ms at `efSearch=16`). Recall@10 was 0.990 at `efSearch=16` and 1.000 above that. Graph walk overhead dominates when the corpus fits in a single brute-force scan. That is why the published table uses Django.
+From `benchmark_results_requests.json` `publishable_results`:
+
+| index | efSearch | recall@10 | p50 latency (ms) | speedup vs flat |
+| --- | --- | --- | --- | --- |
+| flat | — | 1.000 | 0.009 | 1.0× |
+| hnsw | 16 | 0.983 | 0.009 | 1.0× |
+| hnsw | 32 | 0.997 | 0.010 | 0.8× |
+
+HNSW is not faster than flat when the corpus fits in a single brute-force scan. That is why the published headline uses Django.
+
+Labeled hit@10 on the Requests set (flat, `full` chunking): **29/30**.
+
+`benchmark_results.json` is not a measured artifact. Use the two corpus-specific files above.
 
 ## Tradeoffs and what I learned
 
 HNSW trades exactness for speed by walking a sparse neighbor graph instead of scoring every vector. `efSearch` is “how hard should I look?” Lower is faster and missier; higher converges to the flat ranking and gives the speedup back.
 
-On 6116 functions the default `efSearch=64` is the useful operating point: almost the same top-10 as exact search, still about 4x faster. On 151 functions the approximation is pointless.
+On 6187 functions, `efSearch=16` is the useful published operating point: 98.2% of the exact top-10, 9.2× faster. `efSearch=32` is the conservative point. Settings that reported 100% recall@10 are not published.
 
-Chunking strategy, measured as labeled hit@10 on the hand-written `requests` set (flat index):
+On 151 functions the approximation is pointless.
 
-| strategy | hit@10 |
-| --- | --- |
-| `full` (qualname + signature + docstring + first 30 body lines) | 30/30 |
-| `sig` (qualname + signature) | 29/30 |
-| `sig-doc` (qualname + signature + docstring) | 28/30 |
+Chunking strategy, measured as labeled hit@10 on each hand-written set (flat index):
 
-`full` was best. Including a slice of the body helped more than the docstring alone — several `requests` functions have thin or generic docstrings, and the body is where the behavior lives.
+| strategy | requests (30) | django (28) |
+| --- | --- | --- |
+| `full` (qualname + signature + docstring + first 30 body lines) | 29/30 | 20/28 |
+| `sig` (qualname + signature) | 28/30 | 12/28 |
+| `sig-doc` (qualname + signature + docstring) | 27/30 | 19/28 |
+
+`full` was best on both corpora. Including a slice of the body helped more than the docstring alone.
 
 Vectors are L2-normalized and both indexes use inner product, so a score is cosine similarity. Mixing L2 distance with IP would look reasonable and be silently wrong.
 
-A `SyntaxError` in one Django file (newer syntax than the local 3.9 parser) logged a warning and indexing continued. That is the only exception the parser swallows.
+A `SyntaxError` in one source file logs a warning and indexing continues. That is the only exception the parser swallows.
+
+FAISS and PyTorch each ship an OpenMP runtime. Embedding runs in a worker process so those libraries never initialize two copies in the same address space. The process does not set `KMP_DUPLICATE_LIB_OK`.

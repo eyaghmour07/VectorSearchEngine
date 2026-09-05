@@ -1,122 +1,122 @@
 [
   {
-    "query": "retry a request after a connection failure",
+    "query": "when the socket drops, try the HTTP call again instead of failing immediately",
     "relevant_ids": ["requests/adapters.py::HTTPAdapter.send"]
   },
   {
-    "query": "send a prepared HTTP request through a connection pool",
-    "relevant_ids": ["requests/adapters.py::HTTPAdapter.send"]
-  },
-  {
-    "query": "verify a TLS certificate against a CA bundle path",
+    "query": "trust or reject a site certificate using a local CA file",
     "relevant_ids": ["requests/adapters.py::HTTPAdapter.cert_verify"]
   },
   {
-    "query": "build a Response object from a urllib3 response",
+    "query": "wrap a low-level urllib3 reply into the library's Response type",
     "relevant_ids": ["requests/adapters.py::HTTPAdapter.build_response"]
   },
   {
-    "query": "initialize a urllib3 connection pool manager",
+    "query": "create the shared urllib3 pool that later requests reuse",
     "relevant_ids": ["requests/adapters.py::HTTPAdapter.init_poolmanager"]
   },
   {
-    "query": "get a urllib3 connection that includes TLS context settings",
+    "query": "open a pooled connection that already has TLS settings applied",
     "relevant_ids": ["requests/adapters.py::HTTPAdapter.get_connection_with_tls_context"]
   },
   {
-    "query": "choose the request URL path versus full URL when using an HTTP proxy",
+    "query": "for a proxied HTTP call, send the full URL instead of just the path",
     "relevant_ids": ["requests/adapters.py::HTTPAdapter.request_url"]
   },
   {
-    "query": "construct a Request, prepare it, and send it",
+    "query": "one method that builds, prepares, and fires an HTTP call on a session",
     "relevant_ids": ["requests/sessions.py::Session.request"]
   },
   {
-    "query": "merge session cookies and headers onto a request before sending",
+    "query": "copy the session's cookies and headers onto a new outgoing request",
     "relevant_ids": ["requests/sessions.py::Session.prepare_request"]
   },
   {
-    "query": "follow HTTP redirects and collect response history",
+    "query": "keep following 3xx Location hops and remember each hop",
     "relevant_ids": ["requests/sessions.py::SessionRedirectMixin.resolve_redirects"]
   },
   {
-    "query": "decide whether to strip Authorization when redirecting to another host",
+    "query": "drop the Authorization header after a redirect to a different host",
     "relevant_ids": ["requests/sessions.py::SessionRedirectMixin.should_strip_auth"]
   },
   {
-    "query": "read the Location header from a redirect response",
+    "query": "read the next hop URL out of a 3xx response",
     "relevant_ids": ["requests/sessions.py::SessionRedirectMixin.get_redirect_target"]
   },
   {
-    "query": "re-evaluate proxy settings after a redirect including NO_PROXY",
+    "query": "after a redirect, recompute proxies and honor NO_PROXY",
     "relevant_ids": ["requests/sessions.py::SessionRedirectMixin.rebuild_proxies"]
   },
   {
-    "query": "pick the connection adapter that matches a URL prefix",
+    "query": "choose which mounted adapter handles a given URL scheme",
     "relevant_ids": ["requests/sessions.py::Session.get_adapter"]
   },
   {
-    "query": "merge environment proxy and CA bundle settings with session settings",
+    "query": "blend env proxy and CA-bundle settings into the session defaults",
     "relevant_ids": ["requests/sessions.py::Session.merge_environment_settings"]
   },
   {
-    "query": "encode files into a multipart form-data body",
+    "query": "turn uploaded files into a multipart/form-data payload",
     "relevant_ids": ["requests/models.py::RequestEncodingMixin._encode_files"]
   },
   {
-    "query": "prepare JSON or form data as the HTTP request body",
+    "query": "serialize JSON or form fields into the outgoing request body",
     "relevant_ids": ["requests/models.py::PreparedRequest.prepare_body"]
   },
   {
-    "query": "percent-encode and assemble a URL with query parameters",
+    "query": "assemble a final URL with query parameters percent-encoded",
     "relevant_ids": ["requests/models.py::PreparedRequest.prepare_url"]
   },
   {
-    "query": "attach cookies as a Cookie header on a prepared request",
+    "query": "turn a cookie jar into a Cookie request header",
     "relevant_ids": ["requests/models.py::PreparedRequest.prepare_cookies"]
   },
   {
-    "query": "stream a large response body in chunks without loading it all",
+    "query": "stream the response a chunk at a time so it does not all sit in RAM",
     "relevant_ids": ["requests/models.py::Response.iter_content"]
   },
   {
-    "query": "decode response bytes as unicode text using charset detection",
+    "query": "decode the raw bytes using the charset from headers or a detector",
     "relevant_ids": ["requests/models.py::Response.text"]
   },
   {
-    "query": "parse a JSON response body into a Python object",
+    "query": "turn the response body into a Python dict or list via JSON",
     "relevant_ids": ["requests/models.py::Response.json"]
   },
   {
-    "query": "raise an HTTPError when the status code is 4xx or 5xx",
+    "query": "raise if the status code is a client or server error",
     "relevant_ids": ["requests/models.py::Response.raise_for_status"]
   },
   {
-    "query": "build an HTTP Digest Authorization header from a challenge",
+    "query": "compute the Digest Authorization header from a WWW-Authenticate challenge",
     "relevant_ids": ["requests/auth.py::HTTPDigestAuth.build_digest_header"]
   },
   {
-    "query": "retry a request after a 401 digest authentication challenge",
+    "query": "after a 401, resend the request with digest credentials",
     "relevant_ids": ["requests/auth.py::HTTPDigestAuth.handle_401"]
   },
   {
-    "query": "encode a username and password as a Basic Auth header value",
+    "query": "base64-encode user and password for a Basic Authorization header",
     "relevant_ids": ["requests/auth.py::_basic_auth_str"]
   },
   {
-    "query": "copy cookies from a response into a cookie jar",
+    "query": "pull Set-Cookie values from a response into a jar",
     "relevant_ids": ["requests/cookies.py::extract_cookies_to_jar"]
   },
   {
-    "query": "read username and password for a host from a netrc file",
+    "query": "look up host credentials in a ~/.netrc file",
     "relevant_ids": ["requests/utils.py::get_netrc_auth"]
   },
   {
-    "query": "decide whether a URL should bypass configured proxies",
+    "query": "should this URL skip the configured HTTP proxy?",
     "relevant_ids": ["requests/utils.py::should_bypass_proxies"]
   },
   {
-    "query": "run response callback hooks and replace the response if they return one",
+    "query": "run registered response callbacks and keep a replacement if they return one",
     "relevant_ids": ["requests/hooks.py::dispatch_hook"]
+  },
+  {
+    "query": "rewind a file-like body so a retried request can read it again",
+    "relevant_ids": ["requests/utils.py::rewind_body"]
   }
 ]

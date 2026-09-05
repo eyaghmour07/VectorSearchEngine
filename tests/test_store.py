@@ -60,3 +60,36 @@ def test_load_succeeds_when_config_matches(tmp_path: Path) -> None:
     assert stored.meta.chunk_count == 4
     assert stored.chunks[0].id == "mod.py::fn_0"
     assert stored.index.ntotal == 4
+
+
+def test_failed_resave_leaves_previous_index(tmp_path: Path, monkeypatch) -> None:
+    _saved_index(tmp_path, strategy="full")
+    original = load_index(tmp_path, model_name="all-MiniLM-L6-v2", chunk_strategy="full")
+    original_sha = original.meta.index_sha256
+
+    vectors = l2_normalize(np.eye(4, dtype=np.float32))
+    index = FaissFlatIndex(4)
+    index.build(vectors)
+    chunks = [_chunk(i) for i in range(4)]
+    chunks[0].qualname = "replaced"
+
+    def boom(path):
+        Path(path).write_bytes(b"truncated")
+        raise OSError("simulated interrupt")
+
+    monkeypatch.setattr(index, "save", boom)
+    with pytest.raises(OSError, match="simulated interrupt"):
+        save_index(
+            tmp_path,
+            index,
+            chunks,
+            repo_path="/tmp/repo",
+            model_name="all-MiniLM-L6-v2",
+            chunk_strategy="full",
+            index_type="flat",
+        )
+
+    restored = load_index(tmp_path, model_name="all-MiniLM-L6-v2", chunk_strategy="full")
+    assert restored.chunks[0].qualname == "fn_0"
+    assert restored.meta.index_sha256 == original_sha
+    assert restored.index.ntotal == 4

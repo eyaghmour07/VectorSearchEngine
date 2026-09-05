@@ -7,7 +7,7 @@ name = "codesearch"
 version = "0.1.0"
 description = "Semantic code search CLI with a measured exact vs approximate index tradeoff"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "sentence-transformers>=3.0.0",
     "faiss-cpu>=1.8.0",

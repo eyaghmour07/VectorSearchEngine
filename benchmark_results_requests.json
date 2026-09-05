@@ -1,0 +1,191 @@
+{
+  "repo_path": "/private/tmp/requests-corpus/src",
+  "model_name": "all-MiniLM-L6-v2",
+  "chunk_strategy": "full",
+  "chunk_count": 151,
+  "query_count": 30,
+  "ground_truth_path": "data/ground_truth.json",
+  "indexes": [
+    {
+      "index_type": "flat",
+      "build_seconds": 5.404098192229867e-05,
+      "disk_bytes": 231981,
+      "ntotal": 151
+    },
+    {
+      "index_type": "hnsw",
+      "build_seconds": 0.0031297910027205944,
+      "disk_bytes": 273142,
+      "ntotal": 151,
+      "M": 32,
+      "efConstruction": 200
+    }
+  ],
+  "results": [
+    {
+      "index_type": "flat",
+      "ef_search": null,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.008583010639995337,
+      "p95_ms": 0.009792041964828968,
+      "qps": 112742.48635168967,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 16,
+      "recall@1": 1.0,
+      "recall@5": 0.9800000000000001,
+      "recall@10": 0.9833333333333335,
+      "p50_ms": 0.008957984391599894,
+      "p95_ms": 0.010754170943982896,
+      "qps": 110700.82879016701,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 32,
+      "recall@1": 1.0,
+      "recall@5": 0.9933333333333334,
+      "recall@10": 0.9966666666666666,
+      "p50_ms": 0.010124989785254002,
+      "p95_ms": 0.013470463454723346,
+      "qps": 94786.58337006939,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 64,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.012750038877129555,
+      "p95_ms": 0.019295205129310485,
+      "qps": 72440.00199977531,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": false
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 128,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.02091703936457634,
+      "p95_ms": 0.032041038502939045,
+      "qps": 43882.72688047026,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": false
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 256,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.024666020181030035,
+      "p95_ms": 0.03946733195334672,
+      "qps": 37155.157013039,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": false
+    }
+  ],
+  "publishable_results": [
+    {
+      "index_type": "flat",
+      "ef_search": null,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "p50_ms": 0.008583010639995337,
+      "p95_ms": 0.009792041964828968,
+      "qps": 112742.48635168967,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 16,
+      "recall@1": 1.0,
+      "recall@5": 0.9800000000000001,
+      "recall@10": 0.9833333333333335,
+      "p50_ms": 0.008957984391599894,
+      "p95_ms": 0.010754170943982896,
+      "qps": 110700.82879016701,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": true
+    },
+    {
+      "index_type": "hnsw",
+      "ef_search": 32,
+      "recall@1": 1.0,
+      "recall@5": 0.9933333333333334,
+      "recall@10": 0.9966666666666666,
+      "p50_ms": 0.010124989785254002,
+      "p95_ms": 0.013470463454723346,
+      "qps": 94786.58337006939,
+      "timed_runs": 20,
+      "warmup_runs": 5,
+      "sample_count": 600,
+      "publishable": true
+    }
+  ],
+  "human_hit@10": {
+    "k": 10,
+    "hits": 29,
+    "queries": 30,
+    "rate": 0.9666666666666667
+  },
+  "strategy_hit@10": {
+    "full": 0.9666666666666667,
+    "sig": 0.9333333333333333,
+    "sig-doc": 0.9
+  },
+  "output_path": "benchmark_results_requests.json",
+  "recall_warnings": [
+    "HNSW recall@10 was 1.0 at efSearch=64 (n=151). The PRD treats perfect ANN recall as a measurement bug unless investigated. This row is recorded but excluded from publishable_results.",
+    "HNSW recall@10 was 1.0 at efSearch=128 (n=151). The PRD treats perfect ANN recall as a measurement bug unless investigated. This row is recorded but excluded from publishable_results.",
+    "HNSW recall@10 was 1.0 at efSearch=256 (n=151). The PRD treats perfect ANN recall as a measurement bug unless investigated. This row is recorded but excluded from publishable_results."
+  ],
+  "run": {
+    "timestamp_utc": "2026-09-05T19:34:01.308658+00:00",
+    "codesearch_version": "0.1.0",
+    "python": "3.12.14",
+    "python_implementation": "CPython",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 8,
+    "faiss_threads": 1,
+    "openmp_library": "/Users/eyagzz/VectorSearchEngine/.venv312/lib/python3.12/site-packages/torch/lib/libomp.dylib",
+    "numpy_version": "2.5.2",
+    "faiss_version": "1.15.0",
+    "sentence_transformers_version": "6.0.1",
+    "torch_version": "2.14.0",
+    "model_name": "all-MiniLM-L6-v2",
+    "model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "corpus_path": "/private/tmp/requests-corpus/src",
+    "corpus_git_sha": "dae7ef63b4df6eded86637f251fc4e3a06c3b479"
+  }
+}

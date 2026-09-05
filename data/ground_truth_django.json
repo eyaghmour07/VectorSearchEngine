@@ -1,0 +1,114 @@
+[
+  {
+    "query": "try each authentication backend until one accepts the credentials",
+    "relevant_ids": ["contrib/auth/__init__.py::authenticate"]
+  },
+  {
+    "query": "persist a user id on the session after a successful login",
+    "relevant_ids": ["contrib/auth/__init__.py::login"]
+  },
+  {
+    "query": "clear the logged-in user from the current session",
+    "relevant_ids": ["contrib/auth/__init__.py::logout"]
+  },
+  {
+    "query": "load the User model class configured in AUTH_USER_MODEL",
+    "relevant_ids": ["contrib/auth/__init__.py::get_user_model"]
+  },
+  {
+    "query": "compare a raw password against the stored hash on a user",
+    "relevant_ids": ["contrib/auth/base_user.py::AbstractBaseUser.check_password"]
+  },
+  {
+    "query": "fetch one model instance or raise Http404 when it is missing",
+    "relevant_ids": ["shortcuts.py::get_object_or_404"]
+  },
+  {
+    "query": "build a redirect response from a view name, model, or raw URL",
+    "relevant_ids": ["shortcuts.py::redirect"]
+  },
+  {
+    "query": "load the authenticated user from the session, or return AnonymousUser",
+    "relevant_ids": ["contrib/auth/__init__.py::get_user"]
+  },
+  {
+    "query": "look up a URL pattern by view name and fill in its arguments",
+    "relevant_ids": ["urls/base.py::reverse"]
+  },
+  {
+    "query": "match an incoming path against the URLconf and return the view",
+    "relevant_ids": ["urls/base.py::resolve"]
+  },
+  {
+    "query": "run a block of ORM writes as one database transaction",
+    "relevant_ids": ["db/transaction.py::Atomic.__enter__"]
+  },
+  {
+    "query": "insert many model rows in as few SQL statements as possible",
+    "relevant_ids": ["db/models/query.py::QuerySet.bulk_create"]
+  },
+  {
+    "query": "return an existing row or create it if the lookup misses",
+    "relevant_ids": ["db/models/query.py::QuerySet.get_or_create"]
+  },
+  {
+    "query": "update a row if it exists, otherwise insert it",
+    "relevant_ids": ["db/models/query.py::QuerySet.update_or_create"]
+  },
+  {
+    "query": "join related objects in the same SQL query to avoid N+1 lookups",
+    "relevant_ids": ["db/models/query.py::QuerySet.select_related"]
+  },
+  {
+    "query": "prefetch reverse relations in a second query instead of one per row",
+    "relevant_ids": ["db/models/query.py::QuerySet.prefetch_related"]
+  },
+  {
+    "query": "reject a POST that is missing a valid CSRF token",
+    "relevant_ids": ["middleware/csrf.py::CsrfViewMiddleware.process_view"]
+  },
+  {
+    "query": "read a CSRF token that templates can put in a hidden field",
+    "relevant_ids": ["middleware/csrf.py::get_token"]
+  },
+  {
+    "query": "serve a cached page on the way in if one exists",
+    "relevant_ids": ["middleware/cache.py::FetchFromCacheMiddleware.process_request"]
+  },
+  {
+    "query": "store a successful response in the cache on the way out",
+    "relevant_ids": ["middleware/cache.py::UpdateCacheMiddleware.process_response"]
+  },
+  {
+    "query": "reconstruct the hostname from the request, honoring forwarded headers",
+    "relevant_ids": ["http/request.py::HttpRequest.get_host"]
+  },
+  {
+    "query": "build an absolute URL from a request path",
+    "relevant_ids": ["http/request.py::HttpRequest.build_absolute_uri"]
+  },
+  {
+    "query": "set a cookie on an outgoing HTTP response",
+    "relevant_ids": ["http/response.py::HttpResponseBase.set_cookie"]
+  },
+  {
+    "query": "slice a queryset into pages for a list view",
+    "relevant_ids": ["views/generic/list.py::MultipleObjectMixin.paginate_queryset"]
+  },
+  {
+    "query": "load one object for a detail view from the URL kwargs",
+    "relevant_ids": ["views/generic/detail.py::SingleObjectMixin.get_object"]
+  },
+  {
+    "query": "temporarily change Django settings inside a test",
+    "relevant_ids": ["test/utils.py::override_settings.enable"]
+  },
+  {
+    "query": "hash a password with the configured hasher",
+    "relevant_ids": ["contrib/auth/hashers.py::make_password"]
+  },
+  {
+    "query": "send an email through Django's configured email backend",
+    "relevant_ids": ["core/mail/__init__.py::send_mail"]
+  }
+]

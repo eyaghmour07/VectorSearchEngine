@@ -3,6 +3,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from codesearch.runtime import configure_measurement_threads
+
+configure_measurement_threads()
+
 import faiss
 import numpy as np
 
@@ -95,6 +99,8 @@ class FaissHNSWIndex(VectorIndex):
         ef_construction: int = DEFAULT_EF_CONSTRUCTION,
         ef_search: int = DEFAULT_EF_SEARCH,
     ) -> None:
+        if ef_search < 1:
+            raise ValueError("ef_search must be >= 1")
         self.dim = dim
         self.m = m
         self.ef_construction = ef_construction
@@ -127,10 +133,10 @@ class FaissHNSWIndex(VectorIndex):
         *,
         ef_search: int | None = None,
     ) -> list[tuple[int, float]]:
-        if ef_search is not None:
-            self._index.hnsw.efSearch = int(ef_search)
-        else:
-            self._index.hnsw.efSearch = self.ef_search
+        resolved = self.ef_search if ef_search is None else int(ef_search)
+        if resolved < 1:
+            raise ValueError("ef_search must be >= 1")
+        self._index.hnsw.efSearch = resolved
         return _search_faiss(self._index, query_vector, k)
 
     def save(self, path: str | Path) -> None:
@@ -163,11 +169,18 @@ def create_index(index_type: str, dim: int, ef_search: int = DEFAULT_EF_SEARCH) 
 
 
 def _search_faiss(index, query_vector: np.ndarray, k: int) -> list[tuple[int, float]]:
+    if k < 1:
+        raise ValueError("k must be >= 1")
     if index.ntotal == 0:
         return []
     query = np.asarray(query_vector, dtype=np.float32)
     if query.ndim == 1:
         query = query.reshape(1, -1)
+    elif query.ndim == 2:
+        if query.shape[0] != 1:
+            raise ValueError(f"Expected a single query vector, got shape {query.shape}")
+    else:
+        raise ValueError(f"Expected a 1D query vector, got shape {query.shape}")
     if query.shape[1] != index.d:
         raise ValueError(f"Query dim {query.shape[1]} does not match index dim {index.d}")
     k = min(k, index.ntotal)

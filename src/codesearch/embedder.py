@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 import numpy as np
 
@@ -24,17 +30,40 @@ class Embedder:
         self.batch_size = batch_size
         self.cache_dir = Path(cache_dir) if cache_dir is not None else None
         self._model = None
+        self._dim = EMBED_DIM if model_name == MODEL_NAME else None
+        self._model_revision: str | None = None
 
     def _load_model(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
 
             self._model = SentenceTransformer(self.model_name)
+            dim = self._model.get_sentence_embedding_dimension()
+            if dim is not None:
+                self._dim = int(dim)
         return self._model
+
+    @property
+    def dim(self) -> int:
+        if self._dim is None:
+            self._load_model()
+        return int(self._dim or EMBED_DIM)
+
+    @property
+    def model_revision(self) -> str | None:
+        if self._model_revision:
+            return self._model_revision
+        if self._model is None:
+            return None
+        revision = getattr(
+            getattr(self._model, "model_card_data", None), "base_model_revision", None
+        ) or getattr(self._model, "_model_revision", None)
+        self._model_revision = revision
+        return revision
 
     def encode(self, texts: list[str], show_progress: bool = True) -> np.ndarray:
         if not texts:
-            return np.zeros((0, EMBED_DIM), dtype=np.float32)
+            return np.zeros((0, self.dim), dtype=np.float32)
 
         vectors = [None] * len(texts)
         missing_indices: list[int] = []
@@ -61,6 +90,11 @@ class Embedder:
         return self.encode([text], show_progress=False)[0]
 
     def _embed_raw(self, texts: list[str], show_progress: bool) -> np.ndarray:
+        if os.environ.get("CODESEARCH_EMBED_WORKER") == "1":
+            return self._embed_raw_local(texts, show_progress)
+        return self._embed_raw_in_worker(texts)
+
+    def _embed_raw_local(self, texts: list[str], show_progress: bool) -> np.ndarray:
         model = self._load_model()
         encoded = model.encode(
             texts,
@@ -69,6 +103,42 @@ class Embedder:
             convert_to_numpy=True,
         )
         return np.asarray(encoded, dtype=np.float32)
+
+    def _embed_raw_in_worker(self, texts: list[str]) -> np.ndarray:
+        with tempfile.TemporaryDirectory(prefix="codesearch-embed-") as tmp:
+            tmp_path = Path(tmp)
+            texts_path = tmp_path / "texts.json"
+            out_path = tmp_path / "vectors.npy"
+            texts_path.write_text(json.dumps(texts), encoding="utf-8")
+            env = os.environ.copy()
+            env["CODESEARCH_EMBED_WORKER"] = "1"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "codesearch.embed_worker",
+                    self.model_name,
+                    str(texts_path),
+                    str(out_path),
+                ],
+                check=False,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout or "").strip()
+                raise RuntimeError(
+                    f"Embedding worker exited {result.returncode}"
+                    + (f": {detail}" if detail else "")
+                )
+            for line in (result.stdout or "").splitlines():
+                if line.startswith("MODEL_REVISION="):
+                    revision = line.split("=", 1)[1].strip()
+                    if revision:
+                        self._model_revision = revision
+            vectors = np.load(out_path)
+        return np.asarray(vectors, dtype=np.float32)
 
     def _cache_path(self, text: str) -> Path | None:
         if self.cache_dir is None:
@@ -81,9 +151,10 @@ class Embedder:
         if path is None or not path.exists():
             return None
         vec = np.load(path)
-        if vec.shape != (EMBED_DIM,):
+        expected = (self.dim,)
+        if vec.shape != expected:
             raise ValueError(
-                f"Cached embedding at {path} has shape {vec.shape}, expected ({EMBED_DIM},)"
+                f"Cached embedding at {path} has shape {vec.shape}, expected {expected}"
             )
         return np.asarray(vec, dtype=np.float32)
 
@@ -92,7 +163,7 @@ class Embedder:
         if path is None:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp.npy")
+        tmp = path.with_name(f".{path.stem}.{os.getpid()}.{uuid4().hex}.tmp.npy")
         np.save(tmp, vector.astype(np.float32, copy=False))
         tmp.replace(path)
 

@@ -9,8 +9,9 @@ import numpy as np
 
 from codesearch.chunker import ChunkStrategy, apply_strategy
 from codesearch.embedder import DEFAULT_CACHE_DIR, MODEL_NAME, Embedder
-from codesearch.index import DEFAULT_EF_SEARCH, FaissFlatIndex, FaissHNSWIndex
+from codesearch.index import FaissFlatIndex, FaissHNSWIndex
 from codesearch.models import CodeChunk
+from codesearch.runtime import collect_run_metadata, configure_measurement_threads
 from codesearch.store import DEFAULT_STORE_DIR, load_index
 
 DEFAULT_GROUND_TRUTH = Path("data") / "ground_truth.json"
@@ -22,12 +23,17 @@ EVAL_KS = (1, 5, 10)
 MAX_K = 10
 
 
+class GroundTruthError(ValueError):
+    """Raised when labels do not match the indexed corpus."""
+
+
 def run_benchmark(
     *,
     ground_truth_path: str | Path = DEFAULT_GROUND_TRUTH,
     store_dir: str | Path = DEFAULT_STORE_DIR,
     output_path: str | Path = DEFAULT_RESULTS_PATH,
 ) -> dict:
+    configure_measurement_threads()
     entries = load_ground_truth(ground_truth_path)
     stored = load_index(
         store_dir,
@@ -37,11 +43,13 @@ def run_benchmark(
     chunks = stored.chunks
     if stored.index.ntotal < 2:
         raise ValueError("Index is too small to benchmark.")
+    _validate_ground_truth_ids(entries, chunks, ground_truth_path)
 
     embedder = Embedder(model_name=MODEL_NAME, cache_dir=DEFAULT_CACHE_DIR)
     texts = [chunk.embedding_text for chunk in chunks]
     vectors = embedder.encode(texts)
-    queries = [embedder.encode_query(entry["query"]) for entry in entries]
+    query_matrix = embedder.encode([entry["query"] for entry in entries], show_progress=False)
+    queries = [query_matrix[i] for i in range(query_matrix.shape[0])]
 
     flat, flat_build_s, flat_bytes = _build_and_size(FaissFlatIndex(vectors.shape[1]), vectors)
     hnsw, hnsw_build_s, hnsw_bytes = _build_and_size(FaissHNSWIndex(vectors.shape[1]), vectors)
@@ -71,6 +79,8 @@ def run_benchmark(
 
     human_hits = _human_hit_at_k(flat, chunks, queries, entries, k=10)
     strategy_hits = _strategy_hit_rates(chunks, entries, embedder)
+    warnings = _recall_warnings(results, chunk_count=len(chunks))
+    publishable = [row for row in results if row["index_type"] == "flat" or row["recall@10"] < 1.0]
 
     payload = {
         "repo_path": stored.meta.repo_path,
@@ -96,10 +106,16 @@ def run_benchmark(
             },
         ],
         "results": results,
+        "publishable_results": publishable,
         "human_hit@10": human_hits,
         "strategy_hit@10": strategy_hits,
         "output_path": str(output_path),
-        "recall_warning": _perfect_recall_warning(results, chunk_count=len(chunks)),
+        "recall_warnings": warnings,
+        "run": collect_run_metadata(
+            repo_path=stored.meta.repo_path,
+            model_name=MODEL_NAME,
+            model_revision=embedder.model_revision,
+        ),
     }
     Path(output_path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
@@ -125,6 +141,25 @@ def load_ground_truth(path: str | Path) -> list[dict]:
         if not entry["query"] or not entry["relevant_ids"]:
             raise ValueError(f"Ground-truth entry {i} is missing query or relevant_ids")
     return raw
+
+
+def _validate_ground_truth_ids(
+    entries: list[dict],
+    chunks: list[CodeChunk],
+    ground_truth_path: str | Path,
+) -> None:
+    known = {chunk.id for chunk in chunks}
+    missing: list[str] = []
+    for i, entry in enumerate(entries):
+        unknown = [chunk_id for chunk_id in entry["relevant_ids"] if chunk_id not in known]
+        if unknown:
+            missing.append(f"entry {i} ({entry['query']!r}): {unknown}")
+    if missing:
+        raise GroundTruthError(
+            f"Ground-truth IDs in {ground_truth_path} are not in the indexed corpus:\n  - "
+            + "\n  - ".join(missing)
+            + "\nIndex the same repo the labels were written against."
+        )
 
 
 def _read_strategy(store_dir: str | Path) -> str:
@@ -183,6 +218,7 @@ def _measure_row(
         "timed_runs": TIMED_RUNS,
         "warmup_runs": WARMUP_RUNS,
         "sample_count": len(samples_ms),
+        "publishable": recall_is_exact or recalls["recall@10"] < 1.0,
     }
 
 
@@ -248,7 +284,10 @@ def _strategy_hit_rates(
             vectors = embedder.encode([chunk.embedding_text for chunk in chunks])
             flat = FaissFlatIndex(vectors.shape[1])
             flat.build(vectors)
-            query_vecs = [embedder.encode_query(entry["query"]) for entry in entries]
+            query_matrix = embedder.encode(
+                [entry["query"] for entry in entries], show_progress=False
+            )
+            query_vecs = [query_matrix[i] for i in range(query_matrix.shape[0])]
             rates[strategy.value] = _human_hit_at_k(flat, chunks, query_vecs, entries, k=10)["rate"]
     finally:
         for chunk, text in zip(chunks, original):
@@ -256,13 +295,23 @@ def _strategy_hit_rates(
     return rates
 
 
-def _perfect_recall_warning(results: list[dict], *, chunk_count: int) -> str | None:
-    hnsw_rows = [row for row in results if row["index_type"] == "hnsw"]
-    if not hnsw_rows:
-        return None
-    if any(row["recall@10"] < 1.0 for row in hnsw_rows):
-        return None
-    return (
-        "HNSW recall@10 was 1.0 at every efSearch. That usually means the corpus is too "
-        f"small (n={chunk_count}) or the HNSW index is not actually approximating."
-    )
+def _recall_warnings(results: list[dict], *, chunk_count: int) -> list[str]:
+    warnings: list[str] = []
+    for row in results:
+        if row["index_type"] != "hnsw":
+            continue
+        if row["recall@10"] < 1.0:
+            continue
+        warnings.append(
+            f"HNSW recall@10 was 1.0 at efSearch={row['ef_search']} (n={chunk_count}). "
+            "The PRD treats perfect ANN recall as a measurement bug unless investigated. "
+            "This row is recorded but excluded from publishable_results."
+        )
+    if results and all(
+        row["index_type"] != "hnsw" or row["recall@10"] == 1.0 for row in results
+    ):
+        warnings.append(
+            "Every HNSW efSearch setting reported recall@10=1.0. The corpus is likely too "
+            f"small (n={chunk_count}) for approximate search to diverge from exact search."
+        )
+    return warnings
